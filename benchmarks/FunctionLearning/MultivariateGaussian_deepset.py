@@ -72,7 +72,7 @@ for epoch in range(30000):
         outputs = train_y[index*batch_size:(index+1)*batch_size]
         optimizer.zero_grad()
 
-        pred_y = model(inputs[:,:,:2],inputs[:,:,2:])
+        pred_y = model(inputs[:,:,:2]-train_x[:,None],inputs[:,:,2:])
 #        pred_y = model(inputs)
         loss = torch.mean(torch.sum(((pred_y-outputs)/(outputs))**2,dim=1))
         loss.backward()
@@ -82,7 +82,7 @@ for epoch in range(30000):
 
     if epoch%10==0:
         with torch.no_grad():
-            pred_y = model(valid_context[:,:,:2],valid_context[:,:,2:])
+            pred_y = model(valid_context[:,:,:2]-valid_x[:,None],valid_context[:,:,2:])
             #pred_y = model(valid_x)
             valid_loss_temp = torch.mean(torch.sum(((pred_y-valid_y)/valid_y)**2,dim=1))
             if valid_loss_temp<=valid_loss:

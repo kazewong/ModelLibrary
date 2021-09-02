@@ -24,11 +24,11 @@ class DeepSets_Siren_Weight(torch.nn.Module):
 
 	def __init__(self, in_features, hidden_features, hidden_layers, out_features, set_features=50):
 		super().__init__()
-		self.feature_extractor = Siren(in_features, hidden_features, hidden_layers, set_features, outermost_linear=True)
+		self.feature_extractor = Siren(in_features+out_features, hidden_features, hidden_layers, set_features, outermost_linear=True)
 		self.regressor = Siren(set_features, hidden_features, hidden_layers, out_features, outermost_linear=True)
 
 	def get_weight(self,locations, values):
-		context = locations#torch.cat((locations, values), axis=-1)
+		context = torch.cat((locations, values), axis=-1)
 		context,context_coord = self.feature_extractor(context)
 #		context,context_coord = self.regressor(context)
 
