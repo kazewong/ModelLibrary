@@ -33,7 +33,7 @@ class DeepSets_Siren_Weight(torch.nn.Module):
 #		context,context_coord = self.regressor(context)
 
 		pooled_context = context.sum(dim=2)
-		pooled_context = F.softmax(pooled_context,dim=1)
+		#pooled_context = F.softmax(pooled_context,dim=1)
 		return pooled_context
 	
 
@@ -41,8 +41,6 @@ class DeepSets_Siren_Weight(torch.nn.Module):
 		weights = self.get_weight(locations,values)
 		output = (weights[:,:,None]*values).sum(dim=1)
 		return output
-
-
 
 class DeepSets(torch.nn.Module):
 
