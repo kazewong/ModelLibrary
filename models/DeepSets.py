@@ -25,20 +25,23 @@ class DeepSets_Siren_Weight(torch.nn.Module):
 	def __init__(self, in_features, hidden_features, hidden_layers, out_features, set_features=50):
 		super().__init__()
 		self.feature_extractor = Siren(in_features+out_features, hidden_features, hidden_layers, set_features, outermost_linear=True)
+		self.query_extractor = Siren(in_features, hidden_features, hidden_layers, 1, outermost_linear=True)
 		self.regressor = Siren(set_features, hidden_features, hidden_layers, out_features, outermost_linear=True)
 
-	def get_weight(self,locations, values):
+	def get_weight(self, locations, values, query):
 		context = torch.cat((locations, values), axis=-1)
 		context,context_coord = self.feature_extractor(context)
+		query,query_coord = self.query_extractor(query)
 #		context,context_coord = self.regressor(context)
 
-		pooled_context = context.sum(dim=2)
-		#pooled_context = F.softmax(pooled_context,dim=1)
+		pooled_context = (context).sum(dim=2)
+		pooled_context = pooled_context + torch.repeat_interleave(query,context.shape[1],dim=1)
+#		pooled_context = F.softmax(pooled_context,dim=1)
 		return pooled_context
 	
 
-	def forward(self, locations, values):#, query):
-		weights = self.get_weight(locations,values)
+	def forward(self, locations, values, query):
+		weights = self.get_weight(locations, values, query)
 		output = (weights[:,:,None]*values).sum(dim=1)
 		return output
 
