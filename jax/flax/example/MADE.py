@@ -42,6 +42,8 @@ class MADE(nn.Module):
 
     def __call__(self, x):
         x = self.up(x, self.mask[0])
+        x = nn.swish(x)
         x = self.mid(x, self.mask[1])
+        x = nn.swish(x)
         x = self.down(x, self.mask[2])
         return x
