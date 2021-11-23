@@ -1,10 +1,8 @@
-from typing import Callable, Sequence
+from typing import Callable
 import jax
 from jax._src.lax.lax import log 
 import jax.numpy as jnp
-from jax import random
 from flax import linen as nn
-import optax
 
 def get_masks(input_dim, hidden_dim=64, num_hidden=1):
     masks = []
