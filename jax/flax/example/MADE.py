@@ -30,7 +30,7 @@ class MaskedDense(nn.Module):
         bias = self.param('bias', self.bias_init, (self.n_hidden,))
         return jnp.dot(x, weight * mask) + bias
 
-class MADE(nn.Module):
+class MaskedAutoEncoder(nn.Module):
     n_dim: int
     n_hidden: int
 
@@ -38,12 +38,28 @@ class MADE(nn.Module):
         self.mask = get_masks(self.n_dim, self.n_hidden)
         self.up = MaskedDense(self.n_dim, self.n_hidden)
         self.mid = MaskedDense(self.n_hidden, self.n_hidden)
-        self.down = MaskedDense(self.n_hidden, self.n_dim)
+        self.down = MaskedDense(self.n_hidden, 2*self.n_dim)
 
-    def __call__(self, x):
-        x = self.up(x, self.mask[0])
+    def __call__(self, inputs):
+        log_weight, bias = self.one_pass(inputs)
+        outputs = (inputs - bias)*jnp.exp(-log_weight)
+        log_jacobian = -jnp.sum(log_weight, axis=-1)
+        return outputs, log_jacobian
+
+    def one_pass(self, inputs):
+        x = self.up(inputs, self.mask[0])
         x = nn.swish(x)
         x = self.mid(x, self.mask[1])
         x = nn.swish(x)
-        x = self.down(x, self.mask[2])
-        return x
+        log_weight, bias = self.down(x, self.mask[2].tile(2)).split(2, -1)
+        return log_weight, bias
+
+    def inverse(self, inputs):
+        outputs = jnp.zeros_like(inputs)
+        for i_col in range(inputs.shape[1]):
+            log_weight, bias = self.one_pass(outputs)
+            outputs = jax.ops.index_update(
+                outputs, jax.ops.index[:, i_col], inputs[:, i_col] * jnp.exp(log_weight[:, i_col]) + bias[:, i_col]
+            )
+        log_det_jacobian = -log_weight.sum(-1)
+        return outputs, log_det_jacobian
