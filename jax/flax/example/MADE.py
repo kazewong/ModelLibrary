@@ -1,5 +1,6 @@
 from typing import Callable, Sequence
-import jax 
+import jax
+from jax._src.lax.lax import log 
 import jax.numpy as jnp
 from jax import random
 from flax import linen as nn
@@ -41,12 +42,12 @@ class MaskedAutoEncoder(nn.Module):
         self.down = MaskedDense(self.n_hidden, 2*self.n_dim)
 
     def __call__(self, inputs):
-        log_weight, bias = self.one_pass(inputs)
+        log_weight, bias = self.forward(inputs)
         outputs = (inputs - bias)*jnp.exp(-log_weight)
         log_jacobian = -jnp.sum(log_weight, axis=-1)
         return outputs, log_jacobian
 
-    def one_pass(self, inputs):
+    def forward(self, inputs):
         x = self.up(inputs, self.mask[0])
         x = nn.swish(x)
         x = self.mid(x, self.mask[1])
@@ -57,9 +58,35 @@ class MaskedAutoEncoder(nn.Module):
     def inverse(self, inputs):
         outputs = jnp.zeros_like(inputs)
         for i_col in range(inputs.shape[1]):
-            log_weight, bias = self.one_pass(outputs)
+            log_weight, bias = self.forward(outputs)
             outputs = jax.ops.index_update(
                 outputs, jax.ops.index[:, i_col], inputs[:, i_col] * jnp.exp(log_weight[:, i_col]) + bias[:, i_col]
             )
         log_det_jacobian = -log_weight.sum(-1)
         return outputs, log_det_jacobian
+
+class MaskedAutoregressiveFlow(nn.Module):
+    n_dim: int
+    n_hidden: int
+    n_layer: int
+
+    def setup(self):
+        self.layers = [MaskedAutoEncoder(self.n_dim, self.n_hidden) for _ in range(self.n_layer)]
+    
+    def __call__(self, inputs):
+        log_jacobian = 0
+        for layer in self.layers:
+            inputs, log_jacobian_ = layer(inputs)
+            inputs = inputs[:,::-1]
+            log_jacobian += log_jacobian_
+        return inputs, log_jacobian
+
+    def inverse(self, inputs):
+        # Be careful about flipping the inputs when inversing.
+        log_jacobian = 0
+        for layer in reversed(self.layers):
+            inputs, log_jacobian_ = layer.inverse(inputs)
+            inputs = inputs[:,::-1]
+            log_jacobian += log_jacobian_
+        return inputs, log_jacobian
+    
