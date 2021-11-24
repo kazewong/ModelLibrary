@@ -1,6 +1,5 @@
 from typing import Callable
 import jax
-from jax._src.lax.lax import log 
 import jax.numpy as jnp
 from flax import linen as nn
 
@@ -80,7 +79,7 @@ class MaskedAutoregressiveFlow(nn.Module):
         return inputs, log_jacobian
 
     def inverse(self, inputs):
-        # Be careful about flipping the inputs when inversing.
+        # Be careful about flipping the inputs when inverting the flow.
         log_jacobian = 0
         for layer in reversed(self.layers):
             inputs, log_jacobian_ = layer.inverse(inputs)
