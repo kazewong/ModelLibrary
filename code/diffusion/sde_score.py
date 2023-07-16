@@ -30,7 +30,7 @@ class ScordBasedSDE(eqx.Module):
                  ):
         self.blocks = blocks
 
-    def __call__(self):
+    def __call__(self, x: Array, t: Array) -> Array:
         pass
 
     def score(self):
