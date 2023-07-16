@@ -9,7 +9,8 @@ class UnetBlock(eqx.Module):
     _n_dim: int
     conv_block: eqx.nn.Conv
     conv_transpose_block: eqx.nn.ConvTranspose
-    group_norm: eqx.nn.GroupNorm
+    group_norm_in: eqx.nn.GroupNorm
+    group_norm_out: eqx.nn.GroupNorm
     act: Callable
 
     @property
@@ -31,12 +32,22 @@ class UnetBlock(eqx.Module):
             num_dim, num_in_channels, num_out_channels, kernel_size=kernel_size, key=key, **kwargs)
         self.conv_transpose_block = eqx.nn.ConvTranspose(
             num_dim, num_out_channels, num_in_channels, kernel_size=kernel_size, key=key, **kwargs)
-        self.group_norm = eqx.nn.GroupNorm(group_norm_size, num_out_channels)
+        self.group_norm_in = eqx.nn.GroupNorm(min(group_norm_size, num_out_channels), num_out_channels)
+        self.group_norm_out = eqx.nn.GroupNorm(min(group_norm_size, num_in_channels), num_in_channels)
         self.act = activation
 
     def __call__(self, x: Array) -> Array:
         x = self.conv_block(x)
-        x = self.group_norm(x)
+        x = self.group_norm_in(x)
+        x = self.act(x)
+        return x
+    
+    def encode(self, x: Array) -> Array:
+        return self(x)
+    
+    def decode(self, x: Array) -> Array:
+        x = self.conv_transpose_block(x)
+        x = self.group_norm_out(x)
         x = self.act(x)
         return x
 
