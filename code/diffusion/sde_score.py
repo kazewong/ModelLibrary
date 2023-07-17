@@ -1,3 +1,4 @@
+from typing import Callable
 import equinox as eqx
 import jax
 import jax.numpy as jnp
@@ -22,7 +23,10 @@ class GaussianFourierFeatures(eqx.Module):
 
 class ScordBasedSDE(eqx.Module):
 
-    blocks: list
+    autoencoder: eqx.Module
+    weight_function: Callable
+    drift_function: Callable
+    diffusion_function: Callable
 
     def __init__(self,
                  blocks: list,
@@ -31,9 +35,9 @@ class ScordBasedSDE(eqx.Module):
         self.blocks = blocks
 
     def __call__(self, x: Array, t: Array) -> Array:
-        pass
+        raise NotImplementedError
 
-    def score(self):
+    def loss(self, key: PRNGKeyArray, x: Array, t: Array) -> Array:
         pass
 
     def sample(self):
