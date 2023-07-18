@@ -1,26 +1,26 @@
+from jaxtyping import PyTree, Float, Array, PRNGKeyArray
 from sde_score import ScordBasedSDE
 from common.Unet import Unet
 import jax
 import jax.numpy as jnp
-from torch.utils.data import DataLoader
-import torchvision.transforms as transforms
-from torchvision.datasets import MNIST
+import torchvision
+import torch
 import tqdm
+import optax
+import equinox as eqx
 
-seed = 0
-
-unet = Unet(2, [1,4,8,16], jax.random.PRNGKey(seed))
-sde = ScordBasedSDE(unet, lambda x: 1.0, lambda x: 1.0, lambda x: 1.0)
-
-test_data = jnp.zeros((1, 32, 32))
-
-BATCH_SIZE = 64
+BATCH_SIZE = 256
 LEARNING_RATE = 3e-4
-STEPS = 300
+STEPS = 5
 PRINT_EVERY = 30
 SEED = 5678
+NUM_WORKERS = 4
 
 key = jax.random.PRNGKey(SEED)
+
+unet = Unet(2, [1,4,8,16], key)
+sde = ScordBasedSDE(unet, lambda x: 1.0, lambda x: 1.0, lambda x: 1.0)
+optimizer = optax.adamw(LEARNING_RATE)
 
 normalise_data = torchvision.transforms.Compose(
     [
@@ -41,8 +41,42 @@ test_dataset = torchvision.datasets.MNIST(
     transform=normalise_data,
 )
 trainloader = torch.utils.data.DataLoader(
-    train_dataset, batch_size=BATCH_SIZE, shuffle=True
+    train_dataset, batch_size=BATCH_SIZE, shuffle=True, num_workers=NUM_WORKERS
 )
 testloader = torch.utils.data.DataLoader(
-    test_dataset, batch_size=BATCH_SIZE, shuffle=True
+    test_dataset, batch_size=BATCH_SIZE, shuffle=False, num_workers=NUM_WORKERS
 )
+
+def train(
+    sde: ScordBasedSDE,
+    trainloader: torch.utils.data.DataLoader,
+    testloader: torch.utils.data.DataLoader,
+    key: PRNGKeyArray,
+    steps: int = 1000,
+    print_every: int = 100,
+):
+
+    opt_state = optimizer.init(eqx.filter(sde, eqx.is_inexact_array))
+
+    @eqx.filter_jit
+    def make_step(
+        model: ScordBasedSDE,
+        opt_state: PyTree,
+        batch: Float[Array, "batch 1 28 28"],
+        key: PRNGKeyArray,
+        opt_update
+    ):
+        keys = jax.random.split(key, BATCH_SIZE)
+        batch_loss = lambda model, batch, key: jnp.mean(jax.vmap(model.loss)(batch, key))
+        loss_values, grads = eqx.filter_value_and_grad(batch_loss)(model, batch, keys)
+        updates, opt_state = opt_update(grads, opt_state, model)
+        model = eqx.apply_updates(model, updates)
+        return model, opt_state, loss_values
+    
+    for step in tqdm.trange(steps):
+        for batch in trainloader:
+            key, subkey = jax.random.split(key)
+            batch = jnp.array(batch[0])
+            sde, opt_state, loss_values = make_step(sde, opt_state, batch, subkey, optimizer.update)
+        # if step % print_every == 0:
+        #     print(f"Step {step}: {loss_values}")
