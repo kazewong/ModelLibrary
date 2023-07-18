@@ -66,7 +66,7 @@ def train(
         key: PRNGKeyArray,
         opt_update
     ):
-        keys = jax.random.split(key, BATCH_SIZE)
+        keys = jax.random.split(key, batch.shape[0])
         batch_loss = lambda model, batch, key: jnp.mean(jax.vmap(model.loss)(batch, key))
         loss_values, grads = eqx.filter_value_and_grad(batch_loss)(model, batch, keys)
         updates, opt_state = opt_update(grads, opt_state, model)
@@ -78,5 +78,8 @@ def train(
             key, subkey = jax.random.split(key)
             batch = jnp.array(batch[0])
             sde, opt_state, loss_values = make_step(sde, opt_state, batch, subkey, optimizer.update)
+            print(loss_values)
         # if step % print_every == 0:
         #     print(f"Step {step}: {loss_values}")
+
+train(sde, trainloader, testloader, key)
