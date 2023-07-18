@@ -18,8 +18,8 @@ NUM_WORKERS = 4
 
 key = jax.random.PRNGKey(SEED)
 
-unet = Unet(2, [1,4,8,16], key)
-sde = ScordBasedSDE(unet, lambda x: 1.0, lambda x: 1.0, lambda x: 1.0)
+unet = Unet(2, [1,16,32,64,128], key)
+sde = ScordBasedSDE(unet, lambda x: 1.0, lambda x: 1.0, lambda x: (25**(2 * x) - 1.) / 2. / jnp.log(25))
 optimizer = optax.adamw(LEARNING_RATE)
 
 normalise_data = torchvision.transforms.Compose(
@@ -56,7 +56,7 @@ def train(
     print_every: int = 100,
 ):
 
-    opt_state = optimizer.init(eqx.filter(sde, eqx.is_inexact_array))
+    opt_state = optimizer.init(eqx.filter(sde, eqx.is_array))
 
     @eqx.filter_jit
     def make_step(
