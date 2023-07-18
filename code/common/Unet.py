@@ -65,6 +65,10 @@ class Unet(eqx.Module):
     blocks: list[UnetBlock]
     conv_out: eqx.nn.Conv
 
+    @property
+    def n_dim(self):
+        return self.blocks[0].n_dim
+
     def __init__(self,
                  num_dim: int,
                  channels: list[int],

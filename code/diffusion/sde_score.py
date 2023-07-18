@@ -28,17 +28,43 @@ class ScordBasedSDE(eqx.Module):
     drift_function: Callable
     diffusion_function: Callable
 
+    @property
+    def n_dim(self) -> int:
+        return self.autoencoder.n_dim
+
     def __init__(self,
-                 blocks: list,
-                 key: PRNGKeyArray,
-                 ):
-        self.blocks = blocks
+                autoencoder: eqx.Module,
+                weight_function: Callable,
+                drift_function: Callable,
+                diffusion_function: Callable,
+                ):
+        self.autoencoder = autoencoder
+        self.weight_function = weight_function
+        self.drift_function = drift_function
+        self.diffusion_function = diffusion_function
 
-    def __call__(self, x: Array, t: Array) -> Array:
-        raise NotImplementedError
+    def __call__(self, x: Array, key: PRNGKeyArray, eps: float = 1e-5) -> Array:
+        key, subkey = jax.random.split(key)
+        random_t = jax.random.uniform(subkey, (x.shape[0], 1), minval=eps, maxval=1.0)
+        key, subkey = jax.random.split(key)
+        z = jax.random.normal(subkey, x.shape)
+        std = jnp.sqrt(self.diffusion_function(random_t))
+        perturbed_x = x + std * z
+        score = self.autoencoder(perturbed_x, random_t)
+        loss = self.weight_function(random_t)* jnp.mean(jnp.sum((score*std+z) ** 2, axis=range(1,self.n_dim+1)))
+        return loss
+        
 
-    def loss(self, key: PRNGKeyArray, x: Array, t: Array) -> Array:
-        pass
+    def loss(self, x: Array, key: PRNGKeyArray, eps: float = 1e-5) -> Array:
+        key, subkey = jax.random.split(key)
+        random_t = jax.random.uniform(subkey, (1,), minval=eps, maxval=1.0)
+        key, subkey = jax.random.split(key)
+        z = jax.random.normal(subkey, x.shape)
+        std = jnp.sqrt(self.diffusion_function(random_t))
+        perturbed_x = x + std * z
+        score = self.autoencoder(perturbed_x, random_t)
+        loss = self.weight_function(random_t)* jnp.mean(jnp.sum((score*std+z) ** 2, axis=range(1,self.n_dim+1)))
+        return loss
 
     def sample(self):
         pass
