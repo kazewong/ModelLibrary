@@ -3,6 +3,7 @@ import equinox as eqx
 import jax
 import jax.numpy as jnp
 from jaxtyping import Array, PRNGKeyArray
+import diffrax
 
 class GaussianFourierFeatures(eqx.Module):
 
@@ -44,17 +45,8 @@ class ScordBasedSDE(eqx.Module):
         self.diffusion_function = diffusion_function
 
     def __call__(self, x: Array, key: PRNGKeyArray, eps: float = 1e-5) -> Array:
-        key, subkey = jax.random.split(key)
-        random_t = jax.random.uniform(subkey, (x.shape[0], 1), minval=eps, maxval=1.0)
-        key, subkey = jax.random.split(key)
-        z = jax.random.normal(subkey, x.shape)
-        std = jnp.sqrt(self.diffusion_function(random_t))
-        perturbed_x = x + std * z
-        score = self.autoencoder(perturbed_x, random_t)
-        loss = self.weight_function(random_t)* jnp.mean(jnp.sum((score*std+z) ** 2, axis=range(1,self.n_dim+1)))
-        return loss
+        return self.score(x, key, eps)
         
-
     def loss(self, x: Array, key: PRNGKeyArray, eps: float = 1e-5) -> Array:
         key, subkey = jax.random.split(key)
         random_t = jax.random.uniform(subkey, (1,), minval=eps, maxval=1.0)
@@ -62,9 +54,15 @@ class ScordBasedSDE(eqx.Module):
         z = jax.random.normal(subkey, x.shape)
         std = jnp.sqrt(self.diffusion_function(random_t))
         perturbed_x = x + std * z
-        score = self.autoencoder(perturbed_x, random_t)
+        score = self.score(perturbed_x, random_t)
         loss = self.weight_function(random_t)* jnp.mean(jnp.sum((score*std+z) ** 2, axis=range(1,self.n_dim+1)))
         return loss
+
+
+    def score(self, x: Array, t: Array) -> Array:
+        std = jnp.sqrt(self.diffusion_function(t))
+        score = self.autoencoder(x, t) / std
+        return score
 
     def sample(self):
         pass
