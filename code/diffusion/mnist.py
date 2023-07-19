@@ -11,15 +11,15 @@ import equinox as eqx
 
 BATCH_SIZE = 256
 LEARNING_RATE = 3e-4
-STEPS = 5
-PRINT_EVERY = 30
+STEPS = 30
+PRINT_EVERY = 2
 SEED = 5678
 NUM_WORKERS = 4
 
 key = jax.random.PRNGKey(SEED)
 
 unet = Unet(2, [1,16,32,64,128], key)
-sde = ScordBasedSDE(unet, lambda x: 1.0, lambda x: 1.0, lambda x: (25**(2 * x) - 1.) / 2. / jnp.log(25))
+sde = ScordBasedSDE(unet, lambda x: 1.0, lambda x: 1.0, lambda x: 25**x,lambda x: (25**(2 * x) - 1.) / 2. / jnp.log(25))
 optimizer = optax.adamw(LEARNING_RATE)
 
 normalise_data = torchvision.transforms.Compose(
@@ -78,8 +78,12 @@ def train(
             key, subkey = jax.random.split(key)
             batch = jnp.array(batch[0])
             sde, opt_state, loss_values = make_step(sde, opt_state, batch, subkey, optimizer.update)
-            print(loss_values)
-        # if step % print_every == 0:
-        #     print(f"Step {step}: {loss_values}")
+        if step % print_every == 0:
+            print(f"Step {step}: {loss_values}")
+        key, subkey = jax.random.split(key)
 
-train(sde, trainloader, testloader, key)
+    return sde, opt_state
+
+train(sde, trainloader, testloader, key, steps = STEPS, print_every=PRINT_EVERY)
+key = jax.random.PRNGKey(9527)
+images = sde.sample((1,28,28) ,key, 100, 4)
