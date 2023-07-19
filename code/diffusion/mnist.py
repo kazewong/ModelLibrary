@@ -1,5 +1,5 @@
 from jaxtyping import PyTree, Float, Array, PRNGKeyArray
-from sde_score import ScordBasedSDE
+from sde_score import ScordBasedSDE, GaussianFourierFeatures
 from common.Unet import Unet
 import jax
 import jax.numpy as jnp
@@ -10,16 +10,17 @@ import optax
 import equinox as eqx
 
 BATCH_SIZE = 256
-LEARNING_RATE = 3e-4
+LEARNING_RATE = 1e-4
 STEPS = 30
 PRINT_EVERY = 2
 SEED = 5678
 NUM_WORKERS = 4
 
 key = jax.random.PRNGKey(SEED)
+key, subkey = jax.random.split(key)
 
-unet = Unet(2, [1,16,32,64,128], key)
-sde = ScordBasedSDE(unet, lambda x: 1.0, lambda x: 1.0, lambda x: 25**x,lambda x: (25**(2 * x) - 1.) / 2. / jnp.log(25))
+unet = Unet(2, [1,16,32,64,128], 128, key)
+sde = ScordBasedSDE(unet, lambda x: 1.0, lambda x: 1.0, lambda x: 25**x,lambda x: (25**(2 * x) - 1.) / 2. / jnp.log(25), GaussianFourierFeatures(128, subkey))
 optimizer = optax.adamw(LEARNING_RATE)
 
 normalise_data = torchvision.transforms.Compose(
@@ -73,17 +74,29 @@ def train(
         model = eqx.apply_updates(model, updates)
         return model, opt_state, loss_values
     
+    max_loss = 1e10
     for step in tqdm.trange(steps):
         for batch in trainloader:
             key, subkey = jax.random.split(key)
             batch = jnp.array(batch[0])
             sde, opt_state, loss_values = make_step(sde, opt_state, batch, subkey, optimizer.update)
         if step % print_every == 0:
+            test_loss = 0
+            for batch in testloader:
+                key, subkey = jax.random.split(key)
+                batch = jnp.array(batch[0])
+                subkey = jax.random.split(subkey,batch.shape[0])
+                test_loss += jnp.mean(jax.vmap(sde.loss)(batch, subkey))
+            test_loss_values = test_loss / len(testloader)
+            if max_loss > test_loss_values:
+                max_loss = test_loss_values
+                best_model = sde
+                print(f"test loss: {test_loss_values}")
             print(f"Step {step}: {loss_values}")
         key, subkey = jax.random.split(key)
 
-    return sde, opt_state
+    return best_model, opt_state
 
-train(sde, trainloader, testloader, key, steps = STEPS, print_every=PRINT_EVERY)
+sde, opt_state = train(sde, trainloader, testloader, key, steps = STEPS, print_every=PRINT_EVERY)
 key = jax.random.PRNGKey(9527)
 images = sde.sample((1,28,28) ,key, 100, 4)

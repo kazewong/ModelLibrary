@@ -19,7 +19,7 @@ class GaussianFourierFeatures(eqx.Module):
     def __call__(self, x: Array) -> Array:
         weight = jax.lax.stop_gradient(self.weight)
         x_proj = x[:, None] * weight[None, :] * 2 * jnp.pi
-        return jnp.concatenate([jnp.sin(x_proj), jnp.cos(x_proj)], axis=-1)
+        return jnp.concatenate([jnp.sin(x_proj), jnp.cos(x_proj)], axis=-1)[0]
 
 
 class ScordBasedSDE(eqx.Module):
@@ -29,6 +29,7 @@ class ScordBasedSDE(eqx.Module):
     drift_function: Callable
     diffusion_function: Callable
     marginal_prob: Callable
+    time_feature: eqx.Module
 
     @property
     def n_dim(self) -> int:
@@ -40,12 +41,14 @@ class ScordBasedSDE(eqx.Module):
                 drift_function: Callable,
                 diffusion_function: Callable,
                 marginal_prob: Callable,
+                time_feature: GaussianFourierFeatures
                 ):
         self.autoencoder = autoencoder
         self.weight_function = weight_function
         self.drift_function = drift_function
         self.diffusion_function = diffusion_function
         self.marginal_prob = marginal_prob
+        self.time_feature = time_feature
 
     def __call__(self, x: Array, key: PRNGKeyArray, eps: float = 1e-5) -> Array:
         return self.loss(x, key, eps)
@@ -64,7 +67,8 @@ class ScordBasedSDE(eqx.Module):
 
     def score(self, x: Array, t: Array) -> Array:
         std = self.marginal_prob(t)
-        score = self.autoencoder(x, t) / std
+        time_feature = jax.nn.swish(self.time_feature(x=t))
+        score = self.autoencoder(x, time_feature) / std
         return score
 
     def sample(self, data_shape: tuple[int], key: PRNGKeyArray, num_steps:int = 500, batch_size:int = 1, eps: float = 1e-3) -> Array:

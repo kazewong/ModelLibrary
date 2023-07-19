@@ -24,6 +24,7 @@ class UnetBlock(eqx.Module):
                  num_dim: int,
                  num_in_channels: int,
                  num_out_channels: int,
+                 embedding_dim: int,
                  key: PRNGKeyArray,
                  activation: Callable = jax.nn.swish,
                  kernel_size: int = 3,
@@ -38,8 +39,8 @@ class UnetBlock(eqx.Module):
             num_dim, num_out_channels, num_in_channels, kernel_size=kernel_size, key=subkey[1], use_bias=False, padding=1,  **kwargs)
         self.group_norm_in = eqx.nn.GroupNorm(min(group_norm_size, num_out_channels), num_out_channels)
         self.group_norm_out = eqx.nn.GroupNorm(min(group_norm_size, num_in_channels), num_in_channels)
-        self.linear_in = eqx.nn.Linear(1, num_out_channels, key=subkey[2])
-        self.linear_out = eqx.nn.Linear(1, num_in_channels, key=subkey[3])
+        self.linear_in = eqx.nn.Linear(embedding_dim, num_out_channels, key=subkey[2])
+        self.linear_out = eqx.nn.Linear(embedding_dim, num_in_channels, key=subkey[3])
         self.act = activation
 
     def __call__(self, x: Array, t: Array) -> Array:
@@ -72,13 +73,14 @@ class Unet(eqx.Module):
     def __init__(self,
                  num_dim: int,
                  channels: list[int],
+                 embedding_dim: int,
                  key: PRNGKeyArray,
                  **kwargs,
                  ):
         self.blocks = []
         key, subkey = jax.random.split(key)
         for i in range(len(channels) - 1):
-            self.blocks.append(UnetBlock(num_dim, channels[i], channels[i + 1], key, **kwargs))
+            self.blocks.append(UnetBlock(num_dim, channels[i], channels[i + 1], embedding_dim=embedding_dim, key=key, **kwargs))
         self.conv_out = eqx.nn.Conv(num_dim, channels[1], channels[0], padding=1, kernel_size= 3, key=subkey)
         
     def __call__(self, x: Array, t: Array) -> Array:
