@@ -13,8 +13,8 @@ import jax.sharding as sharding
 
 BATCH_SIZE = 256
 LEARNING_RATE = 1e-4
-STEPS = 30
-PRINT_EVERY = 2
+STEPS = 100
+PRINT_EVERY = 4
 SEED = 5678
 NUM_WORKERS = 4
 

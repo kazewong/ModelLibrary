@@ -54,7 +54,7 @@ class ScordBasedSDE(eqx.Module):
         self.diffusion_function = diffusion_function
         self.marginal_prob = marginal_prob
         self.time_feature = time_feature
-        self.time_embed = eqx.nn.Linear(time_feature.n_dim*2, autoencoder.embedding_dim, key=jax.random.PRNGKey(57104))
+        self.time_embed = eqx.nn.Linear(time_feature.n_dim*2, autoencoder., key=jax.random.PRNGKey(57104))
 
     def __call__(self, x: Array, key: PRNGKeyArray, eps: float = 1e-5) -> Array:
         return self.loss(x, key, eps)
