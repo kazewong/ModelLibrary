@@ -69,6 +69,10 @@ class Unet(eqx.Module):
     @property
     def n_dim(self):
         return self.blocks[0].n_dim
+    
+    @property
+    def embedding_dim(self):
+        return self.blocks[0].linear_in.in_features
 
     def __init__(self,
                  num_dim: int,
