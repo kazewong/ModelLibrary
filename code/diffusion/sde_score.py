@@ -54,20 +54,21 @@ class ScordBasedSDE(eqx.Module):
         self.diffusion_function = diffusion_function
         self.marginal_prob = marginal_prob
         self.time_feature = time_feature
-        self.time_embed = eqx.nn.Linear(time_feature.n_dim*2, autoencoder., key=jax.random.PRNGKey(57104))
+        self.time_embed = eqx.nn.Linear(time_feature.n_dim*2, autoencoder.embedding_dim, key=jax.random.PRNGKey(57104))
 
     def __call__(self, x: Array, key: PRNGKeyArray, eps: float = 1e-5) -> Array:
         return self.loss(x, key, eps)
         
     def loss(self, x: Array, key: PRNGKeyArray, eps: float = 1e-5) -> Array:
+        # Loss for one data point
         key, subkey = jax.random.split(key)
-        random_t = jax.random.uniform(subkey, (x.shape[0],), minval=eps, maxval=1.0)
+        random_t = jax.random.uniform(subkey, (1,), minval=eps, maxval=1.0)
         key, subkey = jax.random.split(key)
         z = jax.random.normal(subkey, x.shape)
         std = self.marginal_prob(random_t)
         perturbed_x = x + std * z
         score = self.score(perturbed_x, random_t)
-        loss = self.weight_function(random_t)* jnp.mean(jnp.sum((score*std+z) ** 2, axis=range(1,self.n_dim+1)))
+        loss = self.weight_function(random_t)* jnp.sum((score*std+z) ** 2)
         return loss
 
     def score(self, x: Array, t: Array) -> Array:
@@ -81,7 +82,7 @@ class ScordBasedSDE(eqx.Module):
         key, subkey = jax.random.split(key)
         time_shape = (batch_size,)
         sample_shape = time_shape + data_shape
-        init_x = jax.random.normal(subkey, sample_shape) * self.diffusion_function(1.)
+        init_x = jax.random.normal(subkey, sample_shape)# * self.diffusion_function(1.)
         time_steps = jnp.linspace(1., eps, num_steps)
         step_size = time_steps[0] - time_steps[1]
         x = init_x

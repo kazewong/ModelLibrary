@@ -13,7 +13,7 @@ import jax.sharding as sharding
 
 BATCH_SIZE = 256
 LEARNING_RATE = 1e-4
-STEPS = 100
+STEPS = 30
 PRINT_EVERY = 4
 SEED = 5678
 NUM_WORKERS = 4
@@ -22,7 +22,9 @@ key = jax.random.PRNGKey(SEED)
 key, subkey = jax.random.split(key)
 
 unet = Unet(2, [1,16,32,64,128], 256, key, group_norm_size = 32)
-sde = ScordBasedSDE(unet, lambda x: 1.0, lambda x: 1.0, lambda x: 25**x, lambda x: jnp.sqrt((25**(2 * x) - 1.) / 2. / jnp.log(25)), GaussianFourierFeatures(128, subkey))
+sde = ScordBasedSDE(unet, lambda x: (25**(2 * x) - 1.) / 2. / jnp.log(25), lambda x: 1.0, lambda x: 25**x, lambda x: jnp.sqrt((25**(2 * x) - 1.) / 2. / jnp.log(25)), GaussianFourierFeatures(128, subkey))
+# sde = ScordBasedSDE(unet, lambda x: 1.0- jnp.exp(-x), lambda x: 1.0, lambda x: 25**x, lambda x: jnp.sqrt((25**(2 * x) - 1.) / 2. / jnp.log(25)), GaussianFourierFeatures(128, subkey))
+
 optimizer = optax.adam(LEARNING_RATE)
 
 normalise_data = torchvision.transforms.Compose(
@@ -105,6 +107,8 @@ def train(
 
     return best_model, opt_state
 
+print(jax.vmap(sde.loss)(jnp.array(next(iter(trainloader))[0]),jax.random.split(jax.random.PRNGKey(100),256)).mean())
+# images_before = sde.sample((1,28,28) ,subkey, 300, 4)
 sde, opt_state = train(sde, trainloader, testloader, key, steps = STEPS, print_every=PRINT_EVERY)
 key = jax.random.PRNGKey(9527)
-images = sde.sample((1,28,28) ,subkey, 300, 4)
+images_after = sde.sample((1,28,28) ,subkey, 300, 4)
