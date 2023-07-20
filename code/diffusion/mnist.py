@@ -8,6 +8,8 @@ import torch
 import tqdm
 import optax
 import equinox as eqx
+import jax.experimental.mesh_utils as mesh_utils
+import jax.sharding as sharding
 
 BATCH_SIZE = 256
 LEARNING_RATE = 1e-4
@@ -19,7 +21,7 @@ NUM_WORKERS = 4
 key = jax.random.PRNGKey(SEED)
 key, subkey = jax.random.split(key)
 
-unet = Unet(2, [1,16,32,64,128], 128, key)
+unet = Unet(2, [1,16,32,64,128], 128, key,group_norm_size = 32)
 sde = ScordBasedSDE(unet, lambda x: 1.0, lambda x: 1.0, lambda x: 25**x,lambda x: (25**(2 * x) - 1.) / 2. / jnp.log(25), GaussianFourierFeatures(128, subkey))
 optimizer = optax.adamw(LEARNING_RATE)
 
@@ -74,11 +76,16 @@ def train(
         model = eqx.apply_updates(model, updates)
         return model, opt_state, loss_values
     
+    num_devices = len(jax.devices())
+    devices = mesh_utils.create_device_mesh((num_devices,)+tuple(jnp.ones(sde.n_dim+1,dtype=int).tolist()))
+    shard = sharding.PositionalSharding(devices)
+
     max_loss = 1e10
     for step in tqdm.trange(steps):
         for batch in trainloader:
             key, subkey = jax.random.split(key)
             batch = jnp.array(batch[0])
+            batch = jax.device_put(batch, shard)
             sde, opt_state, loss_values = make_step(sde, opt_state, batch, subkey, optimizer.update)
         if step % print_every == 0:
             test_loss = 0
@@ -93,10 +100,12 @@ def train(
                 best_model = sde
                 print(f"test loss: {test_loss_values}")
             print(f"Step {step}: {loss_values}")
-        key, subkey = jax.random.split(key)
+        # key, subkey = jax.random.split(key)
+        # images = best_model.sample((1,28,28) ,subkey, 300, 4)
+        # print(images.min(), images.max())
+
 
     return best_model, opt_state
 
 sde, opt_state = train(sde, trainloader, testloader, key, steps = STEPS, print_every=PRINT_EVERY)
 key = jax.random.PRNGKey(9527)
-images = sde.sample((1,28,28) ,key, 100, 4)
