@@ -33,7 +33,7 @@ sharding = sharding.PositionalSharding(mesh_utils.create_device_mesh((4,2)))
 # shard = sharding.NamedSharding(global_mesh, P("x","y"))
 
 xs = jax.numpy.ones(jax.local_device_count())+ jax.process_index()
-print(jax.pmap(lambda x: jax.lax.psum(x, 'i'), axis_name='i')(xs))
+# print(jax.pmap(lambda x: jax.lax.psum(x, 'i'), axis_name='i')(xs))
 
 # x_size = 2**14
 # y_size = 2**14
