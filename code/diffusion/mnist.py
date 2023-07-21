@@ -17,13 +17,21 @@ STEPS = 200
 PRINT_EVERY = 4
 SEED = 5678
 NUM_WORKERS = 4
+TIME_FEATURE = 128
+AUTOENCODER_EMBED_DIM = 256
 
 key = jax.random.PRNGKey(SEED)
 key, subkey = jax.random.split(key)
 
-unet = Unet(2, [1,16,32,64,128], 256, key, group_norm_size = 32)
-# sde = ScordBasedSDE(unet, lambda x: (25**(2 * x) - 1.) / 2. / jnp.log(25), lambda x: 1.0, lambda x: 25**x, lambda x: jnp.sqrt((25**(2 * x) - 1.) / 2. / jnp.log(25)), GaussianFourierFeatures(128, subkey))
-sde = ScordBasedSDE(unet, lambda x: 1, lambda x: 1.0, lambda x: 25**x, lambda x: jnp.sqrt((25**(2 * x) - 1.) / 2. / jnp.log(25)), GaussianFourierFeatures(128, subkey))
+unet = Unet(2, [1,16,32,64,128], AUTOENCODER_EMBED_DIM, key, group_norm_size = 32)
+time_embed = eqx.nn.Linear(TIME_FEATURE*2, AUTOENCODER_EMBED_DIM, key=jax.random.PRNGKey(57104))
+sde = ScordBasedSDE(unet,
+                    lambda x: 1,
+                    lambda x: 1.0,
+                    lambda x: 25**x,
+                    lambda x: jnp.sqrt((25**(2 * x) - 1.) / 2. / jnp.log(25)),
+                    GaussianFourierFeatures(128, subkey),
+                    time_embed)
 
 optimizer = optax.adam(LEARNING_RATE)
 
