@@ -53,6 +53,9 @@ trainloader = DataLoader(train_dataset,
                         pin_memory=True)
 
 for i, (x, y) in enumerate(trainloader):
-    y = jax.device_put(jnp.array(y))
+    y = jnp.array(y)
+    y = jax.device_put(y)[None,:]
+    print(i, y.devices())
     if i==0:
-        print(y.devices(),y[0])
+        z = jax.pmap(lambda x: jax.lax.all_gather(x, 'i'), axis_name='i')(y)
+        print(z)
