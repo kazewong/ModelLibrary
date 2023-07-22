@@ -28,7 +28,7 @@ key = jax.random.PRNGKey(SEED)
 key, subkey = jax.random.split(key)
 
 unet = Unet(2, [1,16,32,64,128], AUTOENCODER_EMBED_DIM, key, group_norm_size = 32)
-time_embed = eqx.nn.Linear(TIME_FEATURE*2, AUTOENCODER_EMBED_DIM, key=jax.random.PRNGKey(57104))
+time_embed = eqx.nn.Linear(TIME_FEATURE, AUTOENCODER_EMBED_DIM, key=jax.random.PRNGKey(57104))
 sde = ScordBasedSDE(unet,
                     lambda x: 1,
                     lambda x: 1.0,
@@ -126,6 +126,7 @@ def train(
     best_model = sde
     for step in tqdm.trange(steps):
         for batch in trainloader:
+            print(jax.process_index())
             key, subkey = jax.random.split(key)
             batch = jnp.array(batch[0])
             # batch = jax.device_put(batch, shard)
@@ -149,7 +150,7 @@ def train(
     return best_model, opt_state
 
 # print(jax.vmap(sde.loss)(jnp.array(next(iter(trainloader))[0]),jax.random.split(jax.random.PRNGKey(100),256)).mean())
-# sde, opt_state = train(sde, trainloader, testloader, key, steps = STEPS, print_every=PRINT_EVERY)
+sde, opt_state = train(sde, trainloader, testloader, key, steps = STEPS, print_every=PRINT_EVERY)
 # key = jax.random.PRNGKey(9527)
 # shape: tuple[int] = (1,28,28)
 # images = sde.sample(shape ,subkey, 300, 4)
