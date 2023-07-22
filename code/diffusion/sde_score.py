@@ -55,7 +55,7 @@ class ScordBasedSDE(eqx.Module):
         self.diffusion_function = diffusion_function
         self.marginal_prob = marginal_prob
         self.time_feature = time_feature
-        self.time_embed = 
+        self.time_embed = time_embed
 
     def __call__(self, x: Array, key: PRNGKeyArray, eps: float = 1e-5) -> Array:
         return self.loss(x, key, eps)
