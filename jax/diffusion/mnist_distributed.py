@@ -133,6 +133,7 @@ def train(
         train_sampler.set_epoch(step)
         test_sampler.set_epoch(step)
         for batch in trainloader:
+            print(jax.process_index())
             key, subkey = jax.random.split(key)
             batch = jnp.array(batch[0][None,:])
             sde, opt_state, loss_values = make_step(sde, opt_state, batch, subkey, optimizer.update)
@@ -155,7 +156,6 @@ def train(
     return best_model, opt_state
 
 # print(jax.vmap(sde.loss)(jnp.array(next(iter(trainloader))[0]),jax.random.split(jax.random.PRNGKey(100),256)).mean())
-# if jax.process_index() == 0:
 sde, opt_state = train(sde, trainloader, testloader, key, steps = STEPS, print_every=PRINT_EVERY)
 # key = jax.random.PRNGKey(9527)
 # shape: tuple[int] = (1,28,28)
