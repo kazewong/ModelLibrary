@@ -4,13 +4,16 @@ from common.Unet import Unet
 import jax
 import jax.numpy as jnp
 import torchvision
-import torch
 import tqdm
 import optax
 import equinox as eqx
 import jax.experimental.mesh_utils as mesh_utils
 import jax.sharding as sharding
 from torch.utils.data import DataLoader
+from torch.utils.data.distributed import DistributedSampler
+
+import os
+os.environ['XLA_FLAGS'] = '--xla_force_host_platform_device_count=8'
 
 BATCH_SIZE = 256
 LEARNING_RATE = 1e-4
@@ -36,30 +39,57 @@ sde = ScordBasedSDE(unet,
 
 optimizer = optax.adam(LEARNING_RATE)
 
-normalise_data = torchvision.transforms.Compose(
+
+normalize_data = torchvision.transforms.Compose(
     [
         torchvision.transforms.ToTensor(),
         torchvision.transforms.Normalize((0.5,), (0.5,)),
     ]
 )
 train_dataset = torchvision.datasets.MNIST(
-    "MNIST",
+    "./data/MNIST",
     train=True,
     download=True,
-    transform=normalise_data,
+    transform=normalize_data,
 )
 test_dataset = torchvision.datasets.MNIST(
-    "MNIST",
+    "./data/MNIST",
     train=False,
     download=True,
-    transform=normalise_data,
+    transform=normalize_data,
 )
-trainloader = DataLoader(
-    train_dataset, batch_size=BATCH_SIZE, shuffle=True, num_workers=NUM_WORKERS
-)
-testloader = DataLoader(
-    test_dataset, batch_size=BATCH_SIZE, shuffle=False, num_workers=NUM_WORKERS
-)
+
+print("Creating sampler")
+
+train_sampler = DistributedSampler(train_dataset,
+                            num_replicas=jax.process_count(),
+                            rank=jax.process_index(),
+                            shuffle=True,
+                            seed=SEED)
+
+test_sampler = DistributedSampler(test_dataset,
+                            num_replicas=jax.process_count(),
+                            rank=jax.process_index(),
+                            shuffle=True,
+                            seed=SEED)
+
+print("Creating dataloader")
+
+trainloader = DataLoader(train_dataset,
+                        batch_size=BATCH_SIZE,
+                        sampler=train_sampler,
+                        num_workers=NUM_WORKERS,
+                        shuffle=False,
+                        pin_memory=True)
+
+testloader = DataLoader(test_dataset,
+                        batch_size=BATCH_SIZE,
+                        sampler=test_sampler,
+                        num_workers=NUM_WORKERS,
+                        shuffle=False,
+                        pin_memory=True)
+
+
 
 def train(
     sde: ScordBasedSDE,
@@ -118,8 +148,8 @@ def train(
 
     return best_model, opt_state
 
-print(jax.vmap(sde.loss)(jnp.array(next(iter(trainloader))[0]),jax.random.split(jax.random.PRNGKey(100),256)).mean())
-sde, opt_state = train(sde, trainloader, testloader, key, steps = STEPS, print_every=PRINT_EVERY)
-key = jax.random.PRNGKey(9527)
-shape: tuple[int] = (1,28,28)
-images = sde.sample(shape ,subkey, 300, 4)
+# print(jax.vmap(sde.loss)(jnp.array(next(iter(trainloader))[0]),jax.random.split(jax.random.PRNGKey(100),256)).mean())
+# sde, opt_state = train(sde, trainloader, testloader, key, steps = STEPS, print_every=PRINT_EVERY)
+# key = jax.random.PRNGKey(9527)
+# shape: tuple[int] = (1,28,28)
+# images = sde.sample(shape ,subkey, 300, 4)
