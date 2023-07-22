@@ -1,25 +1,26 @@
 import jax
-import jax.numpy as jnp
 import torchvision
-import torch
-import jax.experimental.mesh_utils as mesh_utils
-import jax.sharding as sharding, Mesh
+from torch.utils.data.distributed import DistributedSampler
+from torch.utils.data import DataLoader
 
 import jax
 import jax.numpy as jnp
-from jax import sharding
-from jax.sharding import 
-import numpy as np
 from jax.sharding import PartitionSpec as P
 from jax.experimental.pjit import pjit
-from jax.experimental import mesh_utils
 
 jax.distributed.initialize()
 print(jax.process_count())
 print(jax.devices())
 print(jax.local_device_count())
 
-
+BATCH_SIZE = 256
+LEARNING_RATE = 1e-4
+STEPS = 200
+PRINT_EVERY = 4
+SEED = 5678
+NUM_WORKERS = 4
+TIME_FEATURE = 128
+AUTOENCODER_EMBED_DIM = 256
 
 normalise_data = torchvision.transforms.Compose(
     [
@@ -33,10 +34,19 @@ train_dataset = torchvision.datasets.MNIST(
     download=True,
     transform=normalise_data,
 )
-test_dataset = torchvision.datasets.MNIST(
-    "MNIST",
-    train=False,
-    download=True,
-    transform=normalise_data,
-)
 
+sampler = DistributedSampler(train_dataset,
+                            num_replicas=jax.process_count(),
+                            rank=jax.process_index(),
+                            shuffle=True,
+                            seed=SEED)
+
+trainloader = DataLoader(train_dataset,
+                        batch_size=BATCH_SIZE,
+                        sampler=sampler,
+                        num_workers=NUM_WORKERS,
+                        shuffle=False,
+                        pin_memory=True)
+
+for i, (x, y) in enumerate(trainloader):
+    print(x)
