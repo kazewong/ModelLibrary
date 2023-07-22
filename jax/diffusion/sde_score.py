@@ -87,10 +87,11 @@ class ScordBasedSDE(eqx.Module):
         time_steps = jnp.linspace(1., eps, num_steps)
         step_size = time_steps[0] - time_steps[1]
         x = init_x
+        mean_x = init_x
         for time_step in tqdm.tqdm(time_steps):      
             batch_time_step = jnp.ones(time_shape+(1,)) * time_step
             g = self.diffusion_function(time_step)
-            mean_x= x + (g**2) * score_map(x, batch_time_step) * step_size
+            mean_x = x + (g**2) * score_map(x, batch_time_step) * step_size
             key, subkey = jax.random.split(key)
             x = mean_x + jnp.sqrt(step_size) * g * jax.random.normal(subkey, x.shape)      
         # Do not include any noise in the last sampling step.

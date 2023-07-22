@@ -10,6 +10,7 @@ import optax
 import equinox as eqx
 import jax.experimental.mesh_utils as mesh_utils
 import jax.sharding as sharding
+from torch.utils.data import DataLoader
 
 BATCH_SIZE = 256
 LEARNING_RATE = 1e-4
@@ -53,17 +54,17 @@ test_dataset = torchvision.datasets.MNIST(
     download=True,
     transform=normalise_data,
 )
-trainloader = torch.utils.data.DataLoader(
+trainloader = DataLoader(
     train_dataset, batch_size=BATCH_SIZE, shuffle=True, num_workers=NUM_WORKERS
 )
-testloader = torch.utils.data.DataLoader(
+testloader = DataLoader(
     test_dataset, batch_size=BATCH_SIZE, shuffle=False, num_workers=NUM_WORKERS
 )
 
 def train(
     sde: ScordBasedSDE,
-    trainloader: torch.utils.data.DataLoader,
-    testloader: torch.utils.data.DataLoader,
+    trainloader: DataLoader,
+    testloader: DataLoader,
     key: PRNGKeyArray,
     steps: int = 1000,
     print_every: int = 100,
@@ -91,6 +92,8 @@ def train(
     shard = sharding.PositionalSharding(devices)
 
     max_loss = 1e10
+    loss_values = 0
+    best_model = sde
     for step in tqdm.trange(steps):
         for batch in trainloader:
             key, subkey = jax.random.split(key)
@@ -118,4 +121,5 @@ def train(
 print(jax.vmap(sde.loss)(jnp.array(next(iter(trainloader))[0]),jax.random.split(jax.random.PRNGKey(100),256)).mean())
 sde, opt_state = train(sde, trainloader, testloader, key, steps = STEPS, print_every=PRINT_EVERY)
 key = jax.random.PRNGKey(9527)
-images = sde.sample((1,28,28) ,subkey, 300, 4)
+shape: tuple[int] = (1,28,28)
+images = sde.sample(shape ,subkey, 300, 4)
