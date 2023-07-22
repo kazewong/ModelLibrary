@@ -7,6 +7,7 @@ import jax
 import jax.numpy as jnp
 from jax.sharding import PartitionSpec as P
 from jax.experimental.pjit import pjit
+import numpy as np
 
 jax.distributed.initialize()
 print(jax.process_count())
@@ -52,10 +53,13 @@ trainloader = DataLoader(train_dataset,
                         shuffle=False,
                         pin_memory=True)
 
-for i, (x, y) in enumerate(trainloader):
-    y = jnp.array(y)
-    y = jax.device_put(y)[None,:]
-    print(i, y.devices())
-    if i==0:
-        z = jax.pmap(lambda x: jax.lax.all_gather(x, 'i'), axis_name='i')(y)
-        print(z)
+global_mesh = jax.sharding.Mesh(np.array(jax.devices()), ('b'))
+
+with global_mesh:
+    for i, (x, y) in enumerate(trainloader):
+        y = jnp.array(y)
+        y = jax.device_put(y)[None,:]*jax.process_index()
+        if i==0:
+            print(y.shape, y.devices())
+            z = jax.pmap(lambda x: jax.lax.pmean(x, 'i'), axis_name='i')(y)
+            print(z)

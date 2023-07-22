@@ -12,9 +12,6 @@ import jax.sharding as sharding
 from torch.utils.data import DataLoader
 from torch.utils.data.distributed import DistributedSampler
 
-import os
-os.environ['XLA_FLAGS'] = '--xla_force_host_platform_device_count=8'
-
 BATCH_SIZE = 256
 LEARNING_RATE = 1e-4
 STEPS = 200
@@ -24,11 +21,16 @@ NUM_WORKERS = 4
 TIME_FEATURE = 128
 AUTOENCODER_EMBED_DIM = 256
 
+jax.distributed.initialize()
+print(jax.process_count())
+print(jax.devices())
+print(jax.local_device_count())
+
 key = jax.random.PRNGKey(SEED)
 key, subkey = jax.random.split(key)
 
 unet = Unet(2, [1,16,32,64,128], AUTOENCODER_EMBED_DIM, key, group_norm_size = 32)
-time_embed = eqx.nn.Linear(TIME_FEATURE*2, AUTOENCODER_EMBED_DIM, key=jax.random.PRNGKey(57104))
+time_embed = eqx.nn.Linear(TIME_FEATURE, AUTOENCODER_EMBED_DIM, key=jax.random.PRNGKey(57104))
 sde = ScordBasedSDE(unet,
                     lambda x: 1,
                     lambda x: 1.0,
@@ -38,7 +40,6 @@ sde = ScordBasedSDE(unet,
                     time_embed)
 
 optimizer = optax.adam(LEARNING_RATE)
-
 
 normalize_data = torchvision.transforms.Compose(
     [
@@ -102,7 +103,7 @@ def train(
 
     opt_state = optimizer.init(eqx.filter(sde, eqx.is_array))
 
-    @eqx.filter_jit
+    # @eqx.filter_jit
     def make_step(
         model: ScordBasedSDE,
         opt_state: PyTree,
@@ -110,9 +111,13 @@ def train(
         key: PRNGKeyArray,
         opt_update
     ):
-        keys = jax.random.split(key, batch.shape[0])
-        batch_loss = lambda model, batch, key: jnp.mean(jax.vmap(model.loss)(batch, key))
-        loss_values, grads = eqx.filter_value_and_grad(batch_loss)(model, batch, keys)
+        @eqx.filter_pmap(in_axes=(None, 0, None), out_axes=0, axis_name='b')
+        def batch_loss(model, batch, key):
+            keys = jax.random.split(key, batch.shape[0])
+            single_device_loss = jnp.mean(jax.vmap(model.loss)(batch, keys))
+            return jax.lax.pmean(single_device_loss, axis_name='b')
+        loss = lambda model, batch, key: batch_loss(model, batch, key)[0]
+        loss_values, grads = eqx.filter_value_and_grad(loss)(model, batch, key)
         updates, opt_state = opt_update(grads, opt_state, model)
         model = eqx.apply_updates(model, updates)
         return model, opt_state, loss_values
@@ -125,10 +130,11 @@ def train(
     loss_values = 0
     best_model = sde
     for step in tqdm.trange(steps):
+        train_sampler.set_epoch(step)
+        test_sampler.set_epoch(step)
         for batch in trainloader:
             key, subkey = jax.random.split(key)
-            batch = jnp.array(batch[0])
-            # batch = jax.device_put(batch, shard)
+            batch = jnp.array(batch[0][None,:])
             sde, opt_state, loss_values = make_step(sde, opt_state, batch, subkey, optimizer.update)
         if step % print_every == 0:
             test_loss = 0
@@ -149,7 +155,8 @@ def train(
     return best_model, opt_state
 
 # print(jax.vmap(sde.loss)(jnp.array(next(iter(trainloader))[0]),jax.random.split(jax.random.PRNGKey(100),256)).mean())
-# sde, opt_state = train(sde, trainloader, testloader, key, steps = STEPS, print_every=PRINT_EVERY)
+# if jax.process_index() == 0:
+sde, opt_state = train(sde, trainloader, testloader, key, steps = STEPS, print_every=PRINT_EVERY)
 # key = jax.random.PRNGKey(9527)
 # shape: tuple[int] = (1,28,28)
 # images = sde.sample(shape ,subkey, 300, 4)
