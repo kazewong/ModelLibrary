@@ -29,17 +29,21 @@ normalise_data = torchvision.transforms.Compose(
     ]
 )
 train_dataset = torchvision.datasets.MNIST(
-    "MNIST",
+    "/mnt/home/wwong/MLProject/ModelLibrary/data/MNIST",
     train=True,
     download=True,
     transform=normalise_data,
 )
+
+print("Creating sampler")
 
 sampler = DistributedSampler(train_dataset,
                             num_replicas=jax.process_count(),
                             rank=jax.process_index(),
                             shuffle=True,
                             seed=SEED)
+
+print("Creating dataloader")
 
 trainloader = DataLoader(train_dataset,
                         batch_size=BATCH_SIZE,
@@ -49,4 +53,6 @@ trainloader = DataLoader(train_dataset,
                         pin_memory=True)
 
 for i, (x, y) in enumerate(trainloader):
-    print(x)
+    y = jax.device_put(jnp.array(y))
+    if i==0:
+        print(y.devices(),y[0])
