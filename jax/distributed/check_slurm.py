@@ -5,12 +5,6 @@
 import os
 import time
 
-os.system("echo SLURM_ID: $SLURM_JOB_ID")
-os.system("echo SLURM_NTASKS: $SLURM_NTASKS")
-os.system("echo SLURM_NODELIST: $SLURM_NODELIST")
-os.system("echo SLURM_STEP_NODELIST: $SLURM_STEP_NODELIST")
-os.system("echo SLURM_STEP_GPUS: $SLURM_STEP_GPUS")
-os.system("echo SLURM_GPUS: $SLURM_GPUS")
 
 import jax
 import jax.numpy as jnp
@@ -20,36 +14,29 @@ import numpy as np
 from jax.sharding import PartitionSpec as P
 from jax.experimental.pjit import pjit
 from jax.experimental import mesh_utils
+from jax.experimental.multihost_utils import process_allgather
+import math
 
 jax.distributed.initialize()
-print(jax.process_count())
-print(jax.devices())
-print(jax.local_device_count())
+global_mesh = Mesh(np.array(jax.devices()), ('b'))
 
-sharding = sharding.PositionalSharding(mesh_utils.create_device_mesh((4,2)))
+if jax.process_index() == 0:
+    os.system("echo SLURM_ID: $SLURM_JOB_ID")
+    os.system("echo SLURM_NTASKS: $SLURM_NTASKS")
+    os.system("echo SLURM_NODELIST: $SLURM_NODELIST")
+    os.system("echo SLURM_STEP_NODELIST: $SLURM_STEP_NODELIST")
+    os.system("echo SLURM_STEP_GPUS: $SLURM_STEP_GPUS")
+    os.system("echo SLURM_GPUS: $SLURM_GPUS")
+    print(jax.process_count())
+    print(jax.devices())
+    print(jax.local_device_count())
 
-# devices = np.array(jax.devices()).reshape(4,2)
-# global_mesh = Mesh(devices, ('x','y'))
-# shard = sharding.NamedSharding(global_mesh, P("x","y"))
+local_shape = (8, 2)
+global_shape = (jax.process_count() * local_shape[0], ) + local_shape[1:]
+local_array = np.arange(math.prod(local_shape)).reshape(local_shape)
+arrays = jax.device_put(
+    np.split(local_array, len(global_mesh.local_devices), axis = 0), global_mesh.local_devices)
+sharding = jax.sharding.NamedSharding(global_mesh, P(('b'), ))
 
-xs = jax.numpy.ones(jax.local_device_count())+ jax.process_index()
-# print(jax.pmap(lambda x: jax.lax.psum(x, 'i'), axis_name='i')(xs))
-
-# x_size = 2**14
-# y_size = 2**14
-
-# x = jax.random.normal(jax.random.PRNGKey(0), (x_size, y_size))
-
-# y = jax.device_put(x)
-
-# print(x.devices(), y.devices())
-# run_time = time.time()
-# z = y@y
-# print(time.time()-run_time)
-
-# with global_mesh:
-#     out = pjit(lambda x, y : x@y)(inp, inp)
-#     print(out)
-# jax.debug.visualize_array_sharding(x)
-
-
+arr = jax.make_array_from_single_device_arrays(global_shape, sharding, arrays)
+print(process_allgather(arr).shape)

@@ -11,6 +11,7 @@ import jax.experimental.mesh_utils as mesh_utils
 import jax.sharding as sharding
 from torch.utils.data import DataLoader
 from torch.utils.data.distributed import DistributedSampler
+import numpy as np
 
 BATCH_SIZE = 256
 LEARNING_RATE = 1e-4
@@ -91,6 +92,7 @@ testloader = DataLoader(test_dataset,
                         pin_memory=True)
 
 
+from jax.experimental.pjit import pjit
 
 def train(
     sde: ScordBasedSDE,
@@ -103,7 +105,7 @@ def train(
 
     opt_state = optimizer.init(eqx.filter(sde, eqx.is_array))
 
-    # @eqx.filter_jit
+    @pjit
     def make_step(
         model: ScordBasedSDE,
         opt_state: PyTree,
@@ -111,52 +113,46 @@ def train(
         key: PRNGKeyArray,
         opt_update
     ):
-        @eqx.filter_pmap(in_axes=(None, 0, None), out_axes=0, axis_name='b')
-        def batch_loss(model, batch, key):
-            keys = jax.random.split(key, batch.shape[0])
-            single_device_loss = jnp.mean(jax.vmap(model.loss)(batch, keys))
-            return jax.lax.pmean(single_device_loss, axis_name='b')
-        loss = lambda model, batch, key: batch_loss(model, batch, key)[0]
-        loss_values, grads = eqx.filter_value_and_grad(loss)(model, batch, key)
+        keys = jax.random.split(key, batch.shape[0])
+        single_device_loss = lambda model, batch, key: jnp.mean(jax.vmap(model.loss)(batch, key))
+        loss_values, grads = eqx.filter_value_and_grad(single_device_loss)(model, batch, keys)
         updates, opt_state = opt_update(grads, opt_state, model)
         model = eqx.apply_updates(model, updates)
         return model, opt_state, loss_values
     
-    num_devices = len(jax.devices())
-    devices = mesh_utils.create_device_mesh((num_devices,)+tuple(jnp.ones(sde.n_dim+1,dtype=int).tolist()))
-    shard = sharding.PositionalSharding(devices)
+    devices = np.array(jax.devices())
+    global_mesh = sharding.Mesh(devices, ('b'))
 
     max_loss = 1e10
     loss_values = 0
     best_model = sde
-    for step in tqdm.trange(steps):
-        train_sampler.set_epoch(step)
-        test_sampler.set_epoch(step)
-        for batch in trainloader:
-            print(jax.process_index())
-            key, subkey = jax.random.split(key)
-            batch = jnp.array(batch[0][None,:])
-            sde, opt_state, loss_values = make_step(sde, opt_state, batch, subkey, optimizer.update)
-        if step % print_every == 0:
-            test_loss = 0
-            for batch in testloader:
+    with global_mesh:
+        for step in tqdm.trange(steps):
+            train_sampler.set_epoch(step)
+            test_sampler.set_epoch(step)
+            for batch in trainloader:
                 key, subkey = jax.random.split(key)
                 batch = jnp.array(batch[0])
-                subkey = jax.random.split(subkey,batch.shape[0])
-                test_loss += jnp.mean(jax.vmap(sde.loss)(batch, subkey))
-            test_loss_values = test_loss / len(testloader)
-            if max_loss > test_loss_values:
-                max_loss = test_loss_values
-                best_model = sde
-                print(f"test loss: {test_loss_values}")
-            print(f"Step {step}: {loss_values}")
-
-
+                sde, opt_state, loss_values = make_step(sde, opt_state, batch, subkey, optimizer.update)
+            if step % print_every == 0:
+                test_loss = 0
+                for batch in testloader:
+                    key, subkey = jax.random.split(key)
+                    batch = jnp.array(batch[0])
+                    subkey = jax.random.split(subkey,batch.shape[0])
+                    test_loss += jnp.mean(jax.vmap(sde.loss)(batch, subkey))
+                test_loss_values = test_loss / len(testloader)
+                if max_loss > test_loss_values:
+                    max_loss = test_loss_values
+                    best_model = sde
+                    print(f"test loss: {test_loss_values}")
+                print(f"Step {step}: {loss_values}")
 
     return best_model, opt_state
 
 # print(jax.vmap(sde.loss)(jnp.array(next(iter(trainloader))[0]),jax.random.split(jax.random.PRNGKey(100),256)).mean())
-sde, opt_state = train(sde, trainloader, testloader, key, steps = STEPS, print_every=PRINT_EVERY)
+if jax.process_index() == 0:
+    sde, opt_state = train(sde, trainloader, testloader, key, steps = STEPS, print_every=PRINT_EVERY)
 # key = jax.random.PRNGKey(9527)
 # shape: tuple[int] = (1,28,28)
 # images = sde.sample(shape ,subkey, 300, 4)
