@@ -19,7 +19,7 @@ class AttentionBlock(eqx.Module):
                 num_heads: int,
                 dropout_prob: float = 0.0,
                 ):
-        self.attention = eqx.nn.MultiheadAttention(num_heads, embed_dim, key=key, dropout_prob=dropout_prob)
+        self.attention = eqx.nn.MultiheadAttention(num_heads, embed_dim, key=key, dropout_p=dropout_prob)
         self.linear_layer = [eqx.nn.Linear(embed_dim, hidden_dim, key=key),
              eqx.nn.Lambda(jax.nn.gelu),
              eqx.nn.Dropout(dropout_prob),
@@ -30,15 +30,22 @@ class AttentionBlock(eqx.Module):
         self.dropout = eqx.nn.Dropout(dropout_prob)
 
 
-    def __call__(self, x: Array, inference: bool = False) -> Array:
+    def __call__(self, x: Array, key: PRNGKeyArray, inference: bool = False) -> Array:
         norm_x = self.layer_norm1(x)
-        attention_out = self.attention(norm_x, norm_x, norm_x, inference=inference)
-
-        x = x + self.dropout(attention_out, inference=inference)
+        key, subkey = jax.random.split(key)
+        attention_out = self.attention(norm_x, norm_x, norm_x, key=subkey, inference=inference)
+        
+        key, subkey = jax.random.split(key)
+        x = x + self.dropout(attention_out, key=key, inference=inference)
         linear_out = self.layer_norm2(x)
-        for layer in self.linear_layer:
-            linear_out = layer(linear_out) if not isinstance(layer, eqx.nn.Dropout) else layer(linear_out, inference=inference)
-        return x + self.dropout(linear_out, inference=inference)
+        linear_out = jax.vmap(self.linear_layer[0])(linear_out)
+        linear_out = self.linear_layer[1](linear_out)
+        key, subkey = jax.random.split(key)
+        linear_out = self.linear_layer[2](linear_out, key=subkey, inference=inference)
+        linear_out = jax.vmap(self.linear_layer[3])(linear_out)
+        key, subkey = jax.random.split(key)
+        output = x + self.dropout(linear_out, key=subkey, inference=inference)
+        return output
 
 class VIT(eqx.Module):
 
@@ -65,7 +72,7 @@ class VIT(eqx.Module):
         self.patch_size = patch_size
 
         key, subkey = jax.random.split(key)
-        self.linear_projector = eqx.nn.Linear(patch_size*patch_size*num_channels,embed_dim, key=subkey)
+        self.linear_projector = eqx.nn.Linear(patch_size*patch_size*num_channels, embed_dim, key=subkey)
 
         key, subkey = jax.random.split(key)
         self.attention_blocks = [AttentionBlock(key, embed_dim, hidden_dim, num_heads, dropout_prob) for _ in range(num_layers)]
@@ -80,49 +87,57 @@ class VIT(eqx.Module):
         )
 
         key, subkey = jax.random.split(key)
-        self.class_token = jax.random.normal(key, (1, 1, embed_dim))
+        self.class_token = jax.random.normal(key, (1, embed_dim))
 
         key, subkey = jax.random.split(key)
-        self.position_embedding = jax.random.normal(key, (1, 1+num_patches, embed_dim))
+        self.position_embedding = jax.random.normal(key, (1+num_patches, embed_dim))
 
     def __call__(self, x: Array, key: PRNGKeyArray, inference: bool = False) -> Array:
         """
         Args:
-            x (Array): Input image of shape (batch_size, Height*Width/(Patch_Size*Patch_Size), Patch_Size*Patch_Size*Num_Channels)
+            x (Array): Input image of shape (Channels, Height, Width)
             key (PRNGKeyArray): Random key for dropout
             train (bool, optional): Whether to apply dropout or not. Defaults to True.
 
         """
         x = self.image_to_patch(x)
-        B, N, _ = x.shape
-        x = self.linear_projector(x)
+        N, _ = x.shape
+        x = jax.vmap(self.linear_projector)(x)
 
-        class_tokens = self.class_token.repeat(B, axis=0)
-        x = jnp.concatenate([class_tokens, x], axis=1)
-        x = x + self.position_embedding[:, :N+1]
+        x = jnp.concatenate([self.class_token, x], axis=0)
+        x = x + self.position_embedding[:N+1]
 
-        x = self.dropout_block(x, key=key, inference=inference)
+        key, subkey = jax.random.split(key)
+        x = self.dropout_block(x, key=subkey, inference=inference)
         for attention_block in self.attention_blocks:
-            x = attention_block(x, inference=inference)
+            key, subkey = jax.random.split(key)
+            x = attention_block(x, key=subkey, inference=inference)
 
         class_token = x[:, 0]
-        out = self.feedforward_head(class_token)
+        out = jax.vmap(self.feedforward_head)(class_token)
         return out
-
-        
 
     def image_to_patch(self, x: Array, flatten_channels: bool = True) -> Array:
         """
         Args:
-            x (Array): Input image of shape (batch_size, Height, Width, Num_Channels)
+            x (Array): Input image of shape (Channels, Height, Width)
 
         Returns:
-            Array: Image patches of shape (batch_size, Height*Width/(Patch_Size*Patch_Size), Patch_Size*Patch_Size*Num_Channels)
+            Array: Image patches of shape (Height*Width/(Patch_Size*Patch_Size), Patch_Size*Patch_Size*Num_Channels)
         """
-        B, C, H, W = x.shape
-        x = x.reshape(B, C, H//self.patch_size, self.patch_size, W//self.patch_size, self.patch_size)
-        x = x.transpose(0, 2, 4, 1, 3, 5)
-        x = x.reshape(B, -1, C, self.patch_size, self.patch_size)
+        C, H, W = x.shape
+        x = x.reshape(C, H//self.patch_size, self.patch_size, W//self.patch_size, self.patch_size)
+        x = x.transpose(1, 3, 0, 2, 4)
+        x = x.reshape(-1, C, self.patch_size, self.patch_size)
         if flatten_channels:
-            x = x.reshape(B, x.shape[1], self.patch_size*self.patch_size*C)
+            x = x.reshape(x.shape[0], self.patch_size*self.patch_size*C)
         return x
+
+def test_vit():
+    key = jax.random.PRNGKey(0)
+    key, subkey = jax.random.split(key)
+    x = jax.random.normal(subkey, (5, 3, 32, 32))
+    model = VIT(key, 128, 512, 4, 3, 6, 10, 4, 64, 0.1)
+    key, subkey = jax.random.split(key)
+    model(x[0], subkey)
+    
