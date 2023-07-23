@@ -8,6 +8,7 @@ import tqdm
 import optax
 import equinox as eqx
 import jax.experimental.mesh_utils as mesh_utils
+from jax._src.distributed import initialize
 from torch.utils.data import DataLoader
 from torch.utils.data.distributed import DistributedSampler
 import numpy as np
@@ -21,7 +22,7 @@ NUM_WORKERS = 4
 TIME_FEATURE = 128
 AUTOENCODER_EMBED_DIM = 256
 
-jax.distributed.initialize()
+initialize()
 print(jax.process_count())
 print(jax.devices())
 print(jax.local_device_count())
