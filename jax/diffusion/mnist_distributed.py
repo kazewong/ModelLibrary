@@ -91,8 +91,6 @@ testloader = DataLoader(test_dataset,
                         pin_memory=True)
 
 
-from jax.experimental.pjit import pjit
-
 def train(
     sde: ScordBasedSDE,
     trainloader: DataLoader,
@@ -153,8 +151,4 @@ def train(
 
     return best_model, opt_state
 
-# print(jax.vmap(sde.loss)(jnp.array(next(iter(trainloader))[0]),jax.random.split(jax.random.PRNGKey(100),256)).mean())
 sde, opt_state = train(sde, trainloader, testloader, key, steps = STEPS, print_every=PRINT_EVERY)
-# key = jax.random.PRNGKey(9527)
-# shape: tuple[int] = (1,28,28)
-# images = sde.sample(shape ,subkey, 300, 4)
