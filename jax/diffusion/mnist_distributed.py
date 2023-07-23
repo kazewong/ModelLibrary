@@ -8,7 +8,6 @@ import tqdm
 import optax
 import equinox as eqx
 import jax.experimental.mesh_utils as mesh_utils
-import jax.sharding as sharding
 from torch.utils.data import DataLoader
 from torch.utils.data.distributed import DistributedSampler
 import numpy as np
@@ -105,7 +104,7 @@ def train(
 
     opt_state = optimizer.init(eqx.filter(sde, eqx.is_array))
 
-    @pjit
+    @eqx.filter_jit
     def make_step(
         model: ScordBasedSDE,
         opt_state: PyTree,
@@ -121,38 +120,41 @@ def train(
         return model, opt_state, loss_values
     
     devices = np.array(jax.devices())
-    global_mesh = sharding.Mesh(devices, ('b'))
+    global_mesh = jax.sharding.Mesh(devices, ('b'))
+    sharding = jax.sharding.NamedSharding(global_mesh, jax.sharding.PartitionSpec(('b'),))
 
     max_loss = 1e10
     loss_values = 0
     best_model = sde
-    with global_mesh:
-        for step in tqdm.trange(steps):
-            train_sampler.set_epoch(step)
-            test_sampler.set_epoch(step)
-            for batch in trainloader:
-                key, subkey = jax.random.split(key)
-                batch = jnp.array(batch[0])
-                sde, opt_state, loss_values = make_step(sde, opt_state, batch, subkey, optimizer.update)
-            if step % print_every == 0:
-                test_loss = 0
-                for batch in testloader:
-                    key, subkey = jax.random.split(key)
-                    batch = jnp.array(batch[0])
-                    subkey = jax.random.split(subkey,batch.shape[0])
-                    test_loss += jnp.mean(jax.vmap(sde.loss)(batch, subkey))
-                test_loss_values = test_loss / len(testloader)
-                if max_loss > test_loss_values:
-                    max_loss = test_loss_values
-                    best_model = sde
-                    print(f"test loss: {test_loss_values}")
-                print(f"Step {step}: {loss_values}")
+    for step in tqdm.trange(steps):
+        train_sampler.set_epoch(step)
+        test_sampler.set_epoch(step)
+        for batch in trainloader:
+            key, subkey = jax.random.split(key)
+            local_batch = jnp.array(batch[0])
+            global_shape = (jax.process_count() * local_batch.shape[0], ) + (1,28,28)
+
+            arrays = jax.device_put(jnp.split(local_batch, len(global_mesh.local_devices), axis = 0), global_mesh.local_devices)
+            global_batch = jax.make_array_from_single_device_arrays(global_shape, sharding, arrays)
+            sde, opt_state, loss_values = make_step(sde, opt_state, global_batch, subkey, optimizer.update)
+        if step % print_every == 0:
+            # test_loss = 0
+            # for batch in testloader:
+            #     key, subkey = jax.random.split(key)
+            #     batch = jnp.array(batch[0])
+            #     subkey = jax.random.split(subkey,batch.shape[0])
+            #     test_loss += jnp.mean(jax.vmap(sde.loss)(batch, subkey))
+            # test_loss_values = test_loss / len(testloader)
+            # if max_loss > test_loss_values:
+            #     max_loss = test_loss_values
+            #     best_model = sde
+            #     print(f"test loss: {test_loss_values}")
+            print(f"Step {step}: {loss_values}")
 
     return best_model, opt_state
 
 # print(jax.vmap(sde.loss)(jnp.array(next(iter(trainloader))[0]),jax.random.split(jax.random.PRNGKey(100),256)).mean())
-if jax.process_index() == 0:
-    sde, opt_state = train(sde, trainloader, testloader, key, steps = STEPS, print_every=PRINT_EVERY)
+sde, opt_state = train(sde, trainloader, testloader, key, steps = STEPS, print_every=PRINT_EVERY)
 # key = jax.random.PRNGKey(9527)
 # shape: tuple[int] = (1,28,28)
 # images = sde.sample(shape ,subkey, 300, 4)
