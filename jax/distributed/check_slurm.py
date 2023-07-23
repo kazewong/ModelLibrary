@@ -14,7 +14,7 @@ import numpy as np
 from jax.sharding import PartitionSpec as P
 from jax.experimental.pjit import pjit
 from jax.experimental import mesh_utils
-from jax.experimental.multihost_utils import process_allgather
+from jax.experimental import multihost_utils
 import math
 
 jax.distributed.initialize()
@@ -31,12 +31,19 @@ if jax.process_index() == 0:
     print(jax.devices())
     print(jax.local_device_count())
 
+
+
 local_shape = (8, 2)
 global_shape = (jax.process_count() * local_shape[0], ) + local_shape[1:]
-local_array = np.arange(math.prod(local_shape)).reshape(local_shape)
+local_array = np.arange(math.prod(local_shape)).reshape(local_shape) + jax.process_index()*1.0
 arrays = jax.device_put(
     np.split(local_array, len(global_mesh.local_devices), axis = 0), global_mesh.local_devices)
+print(arrays)
 sharding = jax.sharding.NamedSharding(global_mesh, P(('b'), ))
-
 arr = jax.make_array_from_single_device_arrays(global_shape, sharding, arrays)
-print(process_allgather(arr).shape)
+
+@jax.jit
+def f(x):
+    return jnp.sum(x*x)
+
+print(multihost_utils.process_allgather(jax.value_and_grad(f)(arr)))
