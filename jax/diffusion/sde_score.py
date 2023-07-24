@@ -29,7 +29,7 @@ class GaussianFourierFeatures(eqx.Module):
 class ScordBasedSDE(eqx.Module):
 
     autoencoder: eqx.Module
-    time_feature: eqx.Module
+    time_feature: GaussianFourierFeatures
     time_embed: eqx.nn.Linear
     weight_function: Callable
     drift_function: Callable
