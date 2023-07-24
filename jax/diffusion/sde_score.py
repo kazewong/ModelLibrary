@@ -96,3 +96,6 @@ class ScordBasedSDE(eqx.Module):
             x = mean_x + jnp.sqrt(step_size) * g * jax.random.normal(subkey, x.shape)      
         # Do not include any noise in the last sampling step.
         return mean_x
+
+    def save_model(self, path: str):
+        eqx.tree_serialise_leaves(path+".eqx", self)
