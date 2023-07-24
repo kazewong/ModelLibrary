@@ -7,11 +7,11 @@ import torchvision
 import tqdm
 import optax
 import equinox as eqx
-import jax.experimental.mesh_utils as mesh_utils
 from jax._src.distributed import initialize
 from torch.utils.data import DataLoader
 from torch.utils.data.distributed import DistributedSampler
 import numpy as np
+import mlflow
 
 BATCH_SIZE = 256
 LEARNING_RATE = 1e-4
@@ -22,6 +22,15 @@ NUM_WORKERS = 4
 TIME_FEATURE = 128
 AUTOENCODER_EMBED_DIM = 256
 
+mlflow.log_params({
+    "batch_size": BATCH_SIZE,
+    "learning_rate": LEARNING_RATE,
+    "steps": STEPS,
+    "seed": SEED,
+    "num_workers": NUM_WORKERS,
+    "time_feature": TIME_FEATURE,
+    "autoencoder_embed_dim": AUTOENCODER_EMBED_DIM
+})
 initialize()
 print(jax.process_count())
 print(jax.devices())
@@ -136,19 +145,23 @@ def train(
             arrays = jax.device_put(jnp.split(local_batch, len(global_mesh.local_devices), axis = 0), global_mesh.local_devices)
             global_batch = jax.make_array_from_single_device_arrays(global_shape, sharding, arrays)
             sde, opt_state, loss_values = make_step(sde, opt_state, global_batch, subkey, optimizer.update)
-        if step % print_every == 0:
-            # test_loss = 0
-            # for batch in testloader:
-            #     key, subkey = jax.random.split(key)
-            #     batch = jnp.array(batch[0])
-            #     subkey = jax.random.split(subkey,batch.shape[0])
-            #     test_loss += jnp.mean(jax.vmap(sde.loss)(batch, subkey))
-            # test_loss_values = test_loss / len(testloader)
-            # if max_loss > test_loss_values:
-            #     max_loss = test_loss_values
-            #     best_model = sde
-            #     print(f"test loss: {test_loss_values}")
-            print(f"Step {step}: {loss_values}")
+        
+        if jax.process_index() == 0:
+            if step % print_every == 0:
+                mlflow.log_metric(key="training_loss", value=loss_values, step=step)
+
+                # test_loss = 0
+                # for batch in testloader:
+                #     key, subkey = jax.random.split(key)
+                #     batch = jnp.array(batch[0])
+                #     subkey = jax.random.split(subkey,batch.shape[0])
+                #     test_loss += jnp.mean(jax.vmap(sde.loss)(batch, subkey))
+                # test_loss_values = test_loss / len(testloader)
+                # if max_loss > test_loss_values:
+                #     max_loss = test_loss_values
+                #     best_model = sde
+                #     print(f"test loss: {test_loss_values}")
+                print(f"Step {step}: {loss_values}")
 
     return best_model, opt_state
 

@@ -83,7 +83,7 @@ class ScordBasedSDE(eqx.Module):
         key, subkey = jax.random.split(key)
         time_shape = (batch_size,)
         sample_shape = time_shape + data_shape
-        init_x = jax.random.normal(subkey, sample_shape)# * self.diffusion_function(1.)
+        init_x = jax.random.normal(subkey, sample_shape) * self.diffusion_function(1.)
         time_steps = jnp.linspace(1., eps, num_steps)
         step_size = time_steps[0] - time_steps[1]
         x = init_x
