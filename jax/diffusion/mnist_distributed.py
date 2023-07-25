@@ -12,6 +12,7 @@ from torch.utils.data import DataLoader
 from torch.utils.data.distributed import DistributedSampler
 import numpy as np
 import mlflow
+import mlflow.pyfunc
 
 BATCH_SIZE = 256
 LEARNING_RATE = 1e-4
@@ -21,7 +22,6 @@ SEED = 5678
 NUM_WORKERS = 4
 TIME_FEATURE = 128
 AUTOENCODER_EMBED_DIM = 256
-
 
 initialize()
 
@@ -75,8 +75,6 @@ test_dataset = torchvision.datasets.MNIST(
     transform=normalize_data,
 )
 
-print("Creating sampler")
-
 train_sampler = DistributedSampler(train_dataset,
                             num_replicas=jax.process_count(),
                             rank=jax.process_index(),
@@ -89,7 +87,6 @@ test_sampler = DistributedSampler(test_dataset,
                             shuffle=True,
                             seed=SEED)
 
-print("Creating dataloader")
 
 trainloader = DataLoader(train_dataset,
                         batch_size=BATCH_SIZE,
@@ -207,8 +204,9 @@ def train(
             if jax.process_index() == 0:
                 mlflow.log_metric(key="training_loss", value=train_loss, step=step)
                 mlflow.log_metric(key="test_loss", value=test_loss, step=step)
-
+                best_model.save_model(mlflow.get_artifact_uri()[7:] + "/best_model")
 
     return best_model, opt_state
 
 sde, opt_state = train(sde, trainloader, testloader, key, steps = STEPS, print_every=PRINT_EVERY)
+mlflow.end_run()
