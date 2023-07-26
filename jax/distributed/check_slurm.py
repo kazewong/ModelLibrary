@@ -16,8 +16,9 @@ from jax.experimental.pjit import pjit
 from jax.experimental import mesh_utils
 from jax.experimental import multihost_utils
 import math
+from jax._src.distributed import initialize
 
-jax.distributed.initialize()
+initialize()
 global_mesh = Mesh(np.array(jax.devices()), ('b'))
 
 if jax.process_index() == 0:

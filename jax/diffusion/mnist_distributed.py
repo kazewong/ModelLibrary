@@ -11,8 +11,7 @@ from jax.experimental.multihost_utils import process_allgather
 from torch.utils.data import DataLoader
 from torch.utils.data.distributed import DistributedSampler
 import numpy as np
-import mlflow
-import mlflow.pyfunc
+from clearml import Task
 
 BATCH_SIZE = 256
 LEARNING_RATE = 1e-4
