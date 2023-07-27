@@ -97,5 +97,17 @@ class ScordBasedSDE(eqx.Module):
         # Do not include any noise in the last sampling step.
         return mean_x
 
+    def inpaint(self):
+        raise NotImplementedError
+
+    def colorize(self):
+        raise NotImplementedError
+
+    def conditional_sample(self):
+        raise NotImplementedError
+
     def save_model(self, path: str):
         eqx.tree_serialise_leaves(path+".eqx", self)
+
+    def load_model(self, path: str):
+        eqx.tree_deserialise_leaves(path+".eqx", self)
