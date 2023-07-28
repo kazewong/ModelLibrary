@@ -2,7 +2,8 @@ import equinox as eqx
 import jax
 import jax.numpy as jnp
 from jaxtyping import Array, PRNGKeyArray
-from typing import Callable, Union
+from typing import Callable
+from sde import SDE
 import tqdm
 
 class GaussianFourierFeatures(eqx.Module):
@@ -32,9 +33,7 @@ class ScordBasedSDE(eqx.Module):
     time_feature: GaussianFourierFeatures
     time_embed: eqx.nn.Linear
     weight_function: Callable
-    drift_function: Callable
-    diffusion_function: Callable
-    marginal_prob: Callable
+    sde: SDE
 
     @property
     def n_dim(self) -> int:
@@ -42,20 +41,16 @@ class ScordBasedSDE(eqx.Module):
 
     def __init__(self,
                 autoencoder: eqx.Module,
-                weight_function: Callable,
-                drift_function: Callable,
-                diffusion_function: Callable,
-                marginal_prob: Callable,
                 time_feature: GaussianFourierFeatures,
                 time_embed: eqx.nn.Linear,
+                weight_function: Callable,
+                sde: SDE,
                 ):
         self.autoencoder = autoencoder
-        self.weight_function = weight_function
-        self.drift_function = drift_function
-        self.diffusion_function = diffusion_function
-        self.marginal_prob = marginal_prob
         self.time_feature = time_feature
         self.time_embed = time_embed
+        self.weight_function = weight_function
+        self.sde = sde
 
     def __call__(self, x: Array, key: PRNGKeyArray, eps: float = 1e-5) -> Array:
         return self.loss(x, key, eps)
@@ -66,14 +61,14 @@ class ScordBasedSDE(eqx.Module):
         random_t = jax.random.uniform(subkey, (1,), minval=eps, maxval=1.0)
         key, subkey = jax.random.split(key)
         z = jax.random.normal(subkey, x.shape)
-        std = self.marginal_prob(random_t)
-        perturbed_x = x + std * z
+        mean, std = self.sde.marginal_prob(x, random_t)
+        perturbed_x = mean + std * z
         score = self.score(perturbed_x, random_t)
         loss = self.weight_function(random_t)* jnp.sum((score*std+z) ** 2)
         return loss
 
     def score(self, x: Array, t: Array) -> Array:
-        std = self.marginal_prob(t)
+        mean, std = self.sde.marginal_prob(x, t)
         time_feature = jax.nn.swish(self.time_embed(self.time_feature(x=t)))
         score = self.autoencoder(x, time_feature) / std
         return score
@@ -83,7 +78,7 @@ class ScordBasedSDE(eqx.Module):
         key, subkey = jax.random.split(key)
         time_shape = (batch_size,)
         sample_shape = time_shape + data_shape
-        init_x = jax.random.normal(subkey, sample_shape) * self.diffusion_function(1.)
+        init_x = jax.random.normal(subkey, sample_shape) * self.sde.diffusion(1.)
         time_steps = jnp.linspace(1., eps, num_steps)
         step_size = time_steps[0] - time_steps[1]
         x = init_x

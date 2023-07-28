@@ -26,13 +26,24 @@ class SDE(eqx.Module):
 
     def __call__(self,
                 x: Array,
-                t: float) -> Array:
+                t: float) -> tuple[Array,Array]:
         return self.sde(x, t)
 
-    @abstractmethod
     def sde(self,
             x: Array,
+            t: float) -> tuple[Array,Array]:
+        return self.drift(x, t), self.diffusion(x, t)
+
+    @abstractmethod
+    def drift(self,
+            x: Array,
             t: float) -> Array:
+        raise NotImplementedError
+
+    @abstractmethod
+    def diffusion(self,
+                x: Array,
+                t: float) -> Array:
         raise NotImplementedError
 
     @abstractmethod
@@ -112,21 +123,19 @@ class VESDE(SDE):
         self.sigma_max = sigma_max
         self.discrete_sigmas = jnp.exp(jnp.linspace(jnp.log(self.sigma_min), jnp.log(self.sigma_max), N))
 
-    def sde(self,
-            x: Array,
-            t: float) -> tuple[Array, Array]:
-        sigma = self.sigma_min * (self.sigma_max / self.sigma_min) ** t
-        drift = jnp.zeros_like(x)
-        diffusion = sigma * jnp.sqrt(2 * (jnp.log(self.sigma_max) - jnp.log(self.sigma_min)))
-        return drift, diffusion
+    def drift(self, x: Array, t: float) -> Array:
+        return jnp.zeros_like(x)
 
-    
-    def marginal_prob(self, x, t):
+    def diffusion(self, x: Array, t: float) -> Array:
+        sigma = self.sigma_min * (self.sigma_max / self.sigma_min) ** t
+        return sigma * jnp.sqrt(2 * (jnp.log(self.sigma_max) - jnp.log(self.sigma_min)))
+
+    def marginal_prob(self, x: Array, t: float) -> tuple[Array, float]:
         std = self.sigma_min * (self.sigma_max / self.sigma_min) ** t
         mean = x
         return mean, std
 
-    def prior_sampling(self, rng, shape):
+    def prior_sampling(self, rng: PRNGKeyArray, shape: tuple):
         return jax.random.normal(rng, shape) * self.sigma_max
 
     def prior_logp(self, z: Array):
