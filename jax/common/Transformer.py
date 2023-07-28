@@ -12,8 +12,9 @@ class TransformerEncoder(eqx.Module):
     dropout_block: eqx.nn.Dropout
     feedforward_head: eqx.nn.Sequential
 
-    def __init__(self):
-        raise NotImplementedError
+    def __init__(self,
+    ):
+        
     
     def __call__(self, tokens: Array) -> Array:
         return self.forward(tokens)
