@@ -49,14 +49,14 @@ class SDE(eqx.Module):
     def logp_prior(self, z: Array) -> Array:
         pass
 
-    def discretize(self, x: Array, t: float) -> tuple[Callable, Callable]:
+    def discretize(self, x: Array, t: float) -> tuple[Array, Array]:
         dt = 1 / self.N
         drift, diffusion = self.sde(x, t)
         f = drift * dt
         G = diffusion * jnp.sqrt(dt)
         return f, G
 
-def reverse(sde:SDE ,score_fn: Callable, probaility_flow=False):
+def reverse_sde(sde:SDE ,score_fn: Callable, probaility_flow=False):
 
     N = sde.N
     T = sde.T
@@ -94,3 +94,52 @@ def reverse(sde:SDE ,score_fn: Callable, probaility_flow=False):
             return rev_f, rev_G
 
     return RSDE()
+
+class VPSDE(SDE):
+    pass
+
+class subVPSDE(SDE):
+    pass
+
+class VESDE(SDE):
+
+    def __init__(self,
+                sigma_min: float = 0.01,
+                sigma_max: float = 50,
+                N: int = 1000):
+        super().__init__(N)
+        self.sigma_min = sigma_min
+        self.sigma_max = sigma_max
+        self.discrete_sigmas = jnp.exp(jnp.linspace(jnp.log(self.sigma_min), jnp.log(self.sigma_max), N))
+
+    def sde(self,
+            x: Array,
+            t: float) -> tuple[Array, Array]:
+        sigma = self.sigma_min * (self.sigma_max / self.sigma_min) ** t
+        drift = jnp.zeros_like(x)
+        diffusion = sigma * jnp.sqrt(2 * (jnp.log(self.sigma_max) - jnp.log(self.sigma_min)))
+        return drift, diffusion
+
+    
+    def marginal_prob(self, x, t):
+        std = self.sigma_min * (self.sigma_max / self.sigma_min) ** t
+        mean = x
+        return mean, std
+
+    def prior_sampling(self, rng, shape):
+        return jax.random.normal(rng, shape) * self.sigma_max
+
+    def prior_logp(self, z: Array):
+        shape = z.shape
+        N = jnp.prod(shape[1:])
+        logp_fn = lambda z: -N / 2. * jnp.log(2 * jnp.pi * self.sigma_max ** 2) - jnp.sum(z ** 2) / (2 * self.sigma_max ** 2)
+        return jax.vmap(logp_fn)(z)
+
+    def discretize(self, x: Array, t: Array) -> tuple[Array, Array]:
+        """SMLD(NCSN) discretization."""
+        timestep = (t * (self.N - 1) / self.T).astype(jnp.int32)
+        sigma = self.discrete_sigmas[timestep]
+        adjacent_sigma = jnp.where(timestep == 0, jnp.zeros_like(timestep), self.discrete_sigmas[timestep - 1])
+        f = jnp.zeros_like(x)
+        G = jnp.sqrt(sigma ** 2 - adjacent_sigma ** 2)
+        return f, G
