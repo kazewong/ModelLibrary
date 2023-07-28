@@ -6,6 +6,12 @@ from typing import Callable, Union
 
 class TransformerEncoder(eqx.Module):
 
+    token_embedding: eqx.nn.Embedding
+    positional_embedding: eqx.nn.Embedding
+    attention_blocks: list
+    dropout_block: eqx.nn.Dropout
+    feedforward_head: eqx.nn.Sequential
+
     def __init__(self):
         raise NotImplementedError
     
