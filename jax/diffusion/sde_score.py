@@ -81,7 +81,7 @@ class ScordBasedSDE(eqx.Module):
         x = x_init
         x_mean = x_init
         for time_step in tqdm.tqdm(time_steps):      
-            drift, diffusion = self.sde.reverse_sde(self.score)(x, time_step)
+            drift, diffusion = self.sde.reverse_sde(x, time_step.reshape(1), self.score)
             x_mean = x + drift * step_size
             key, subkey = jax.random.split(key)
             x = x_mean + diffusion* jnp.sqrt(step_size) * jax.random.normal(subkey, x.shape)      

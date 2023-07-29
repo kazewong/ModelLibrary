@@ -29,7 +29,7 @@ time_embed = eqx.nn.Sequential([
     eqx.nn.Linear(TIME_FEATURE, AUTOENCODER_EMBED_DIM, key=jax.random.PRNGKey(57104)),
     eqx.nn.Lambda(lambda x: jax.nn.swish(x))])
 sde_func = VESDE(sigma_min=0.3,sigma_max=10,N=300) # Choosing the sigma drastically affects the training speed
-sde = ScordBasedSDE(unet,
+model = ScordBasedSDE(unet,
                     GaussianFourierFeatures(128, subkey),
                     time_embed,
                     lambda x: 1,
@@ -117,7 +117,7 @@ def train(
 
     return best_model, opt_state
 
-print(jax.vmap(sde.loss)(jnp.array(next(iter(trainloader))[0]),jax.random.split(jax.random.PRNGKey(100),256)).mean())
-model, opt_state = train(sde, trainloader, testloader, key, steps = STEPS, print_every=PRINT_EVERY)
+print(jax.vmap(model.loss)(jnp.array(next(iter(trainloader))[0]),jax.random.split(jax.random.PRNGKey(100),256)).mean())
+images = model.sample((1,28,28) ,subkey, 4)
+model, opt_state = train(model, trainloader, testloader, key, steps = STEPS, print_every=PRINT_EVERY)
 key = jax.random.PRNGKey(9527)
-images = model.sample((1,28,28) ,subkey, 300, 4)
