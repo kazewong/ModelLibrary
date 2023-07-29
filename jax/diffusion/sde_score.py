@@ -73,7 +73,7 @@ class ScordBasedSDE(eqx.Module):
         score = self.autoencoder(x, time_feature)/std
         return score
 
-    def sample(self, data_shape: tuple[int], key: PRNGKeyArray, num_steps:int = 500, batch_size:int = 1, eps: float = 1e-3) -> Array:
+    def sample(self, data_shape: tuple[int], key: PRNGKeyArray, batch_size:int = 1, eps: float = 1e-3) -> Array:
         score_map = jax.vmap(self.score)
         key, subkey = jax.random.split(key)
         time_shape = (batch_size,)
