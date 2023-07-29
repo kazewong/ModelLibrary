@@ -20,7 +20,6 @@ class SDE(eqx.Module):
         self.N = N
 
     @property
-    @abstractmethod
     def T(self) -> float:
         return 1
 
@@ -134,10 +133,10 @@ class VESDE(SDE):
         std = self.sigma_min * (self.sigma_max / self.sigma_min) ** t
         return x, std
 
-    def prior_sampling(self, rng: PRNGKeyArray, shape: tuple):
+    def sample_prior(self, rng: PRNGKeyArray, shape: tuple):
         return jax.random.normal(rng, shape) * self.sigma_max
 
-    def prior_logp(self, z: Array):
+    def logp_prior(self, z: Array):
         shape = z.shape
         N = jnp.prod(shape[1:])
         logp_fn = lambda z: -N / 2. * jnp.log(2 * jnp.pi * self.sigma_max ** 2) - jnp.sum(z ** 2) / (2 * self.sigma_max ** 2)
