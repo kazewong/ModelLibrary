@@ -10,6 +10,7 @@ import optax
 import equinox as eqx
 import jax.experimental.mesh_utils as mesh_utils
 import jax.sharding as sharding
+from sde import VESDE
 
 BATCH_SIZE = 256
 LEARNING_RATE = 1e-4
@@ -27,13 +28,12 @@ unet = Unet(2, [1,16,32,64,128], AUTOENCODER_EMBED_DIM, key, group_norm_size = 3
 time_embed = eqx.nn.Sequential([
     eqx.nn.Linear(TIME_FEATURE*2, AUTOENCODER_EMBED_DIM, key=jax.random.PRNGKey(57104)),
     eqx.nn.Lambda(lambda x: jax.nn.swish(x))])
+sde = VESDE(300)
 sde = ScordBasedSDE(unet,
-                    lambda x: 1,
-                    lambda x: 1.0,
-                    lambda x: 25**x,
-                    lambda x: jnp.sqrt((25**(2 * x) - 1.) / 2. / jnp.log(25)),
                     GaussianFourierFeatures(128, subkey),
-                    time_embed)
+                    time_embed,
+                    lambda x: 1,
+                    sde,)
 
 optimizer = optax.adam(LEARNING_RATE)
 
