@@ -132,8 +132,7 @@ class VESDE(SDE):
 
     def marginal_prob(self, x: Array, t: float) -> tuple[Array, float]:
         std = self.sigma_min * (self.sigma_max / self.sigma_min) ** t
-        mean = x
-        return mean, std
+        return x, std
 
     def prior_sampling(self, rng: PRNGKeyArray, shape: tuple):
         return jax.random.normal(rng, shape) * self.sigma_max

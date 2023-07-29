@@ -67,9 +67,9 @@ class ScordBasedSDE(eqx.Module):
         loss = self.weight_function(random_t)* jnp.sum((score*std+z) ** 2)
         return loss
 
-    def score(self, x: Array, t: Array) -> Array:
+    def score(self, x: Array, t: float) -> Array:
         mean, std = self.sde.marginal_prob(x, t)
-        time_feature = jax.nn.swish(self.time_embed(self.time_feature(x=t)))
+        time_feature = self.time_embed(self.time_feature(x=t))
         score = self.autoencoder(x, time_feature) / std
         return score
 
@@ -78,14 +78,15 @@ class ScordBasedSDE(eqx.Module):
         key, subkey = jax.random.split(key)
         time_shape = (batch_size,)
         sample_shape = time_shape + data_shape
-        init_x = jax.random.normal(subkey, sample_shape) * self.sde.diffusion(1.)
+        init_x = jax.random.normal(subkey, sample_shape)
+        init_x *= self.sde.diffusion(init_x, 1.)
         time_steps = jnp.linspace(1., eps, num_steps)
         step_size = time_steps[0] - time_steps[1]
         x = init_x
         mean_x = init_x
         for time_step in tqdm.tqdm(time_steps):      
             batch_time_step = jnp.ones(time_shape+(1,)) * time_step
-            g = self.diffusion_function(time_step)
+            g = self.sde.diffusion(x, time_step)
             mean_x = x + (g**2) * score_map(x, batch_time_step) * step_size
             key, subkey = jax.random.split(key)
             x = mean_x + jnp.sqrt(step_size) * g * jax.random.normal(subkey, x.shape)      
@@ -99,6 +100,9 @@ class ScordBasedSDE(eqx.Module):
         raise NotImplementedError
 
     def conditional_sample(self):
+        raise NotImplementedError
+    
+    def evaluate_likelihood(self):
         raise NotImplementedError
 
     def save_model(self, path: str):
