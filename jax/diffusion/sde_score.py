@@ -73,24 +73,20 @@ class ScordBasedSDE(eqx.Module):
         score = self.autoencoder(x, time_feature)/std
         return score
 
-    def sample(self, data_shape: tuple[int], key: PRNGKeyArray, batch_size:int = 1, eps: float = 1e-3) -> Array:
-        score_map = jax.vmap(self.score)
+    def sample(self, data_shape: tuple[int], key: PRNGKeyArray, eps: float = 1e-3) -> Array:
         key, subkey = jax.random.split(key)
-        time_shape = (batch_size,)
-        sample_shape = time_shape + data_shape
-        init_x = self.sde.sample_prior(subkey, sample_shape)
-        time_steps = jnp.linspace(1., eps, num_steps)
+        x_init = self.sde.sample_prior(subkey, data_shape)
+        time_steps = jnp.linspace(self.sde.T, eps, self.sde.N)
         step_size = time_steps[0] - time_steps[1]
-        x = init_x
-        mean_x = init_x
+        x = x_init
+        x_mean = x_init
         for time_step in tqdm.tqdm(time_steps):      
-            batch_time_step = jnp.ones(time_shape+(1,)) * time_step
-            g = self.sde.diffusion(x, time_step)
-            mean_x = x + (g**2) * score_map(x, batch_time_step) * step_size
+            drift, diffusion = self.sde.reverse_sde(self.score)(x, time_step)
+            x_mean = x + drift * step_size
             key, subkey = jax.random.split(key)
-            x = mean_x + jnp.sqrt(step_size) * g * jax.random.normal(subkey, x.shape)      
+            x = x_mean + diffusion* jnp.sqrt(step_size) * jax.random.normal(subkey, x.shape)      
         # Do not include any noise in the last sampling step.
-        return mean_x
+        return x_mean
 
     def inpaint(self):
         raise NotImplementedError

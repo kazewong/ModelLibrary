@@ -78,7 +78,7 @@ class SDE(eqx.Module):
             return x*y
 
         # Build the class for reverse-time SDE.
-        class RSDE(SDE):
+        class RSDE(self.__class__):
             def __init__(self):
                 self.N = N
                 self.probability_flow = probaility_flow
