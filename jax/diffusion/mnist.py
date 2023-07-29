@@ -26,7 +26,7 @@ key, subkey = jax.random.split(key)
 
 unet = Unet(2, [1,16,32,64,128], AUTOENCODER_EMBED_DIM, key, group_norm_size = 32)
 time_embed = eqx.nn.Sequential([
-    eqx.nn.Linear(TIME_FEATURE*2, AUTOENCODER_EMBED_DIM, key=jax.random.PRNGKey(57104)),
+    eqx.nn.Linear(TIME_FEATURE, AUTOENCODER_EMBED_DIM, key=jax.random.PRNGKey(57104)),
     eqx.nn.Lambda(lambda x: jax.nn.swish(x))])
 sde = VESDE(300)
 sde = ScordBasedSDE(unet,

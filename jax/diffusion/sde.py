@@ -113,6 +113,10 @@ class subVPSDE(SDE):
 
 class VESDE(SDE):
 
+    sigma_min: float
+    sigma_max: float
+    discrete_sigmas: Array
+
     def __init__(self,
                 sigma_min: float = 0.01,
                 sigma_max: float = 50,
