@@ -70,7 +70,7 @@ class ScordBasedSDE(eqx.Module):
     def score(self, x: Array, t: float) -> Array:
         mean, std = self.sde.marginal_prob(x, t)
         time_feature = self.time_embed(self.time_feature(x=t))
-        score = self.autoencoder(x, time_feature) / std
+        score = self.autoencoder(x, time_feature)/std
         return score
 
     def sample(self, data_shape: tuple[int], key: PRNGKeyArray, num_steps:int = 500, batch_size:int = 1, eps: float = 1e-3) -> Array:
@@ -78,8 +78,7 @@ class ScordBasedSDE(eqx.Module):
         key, subkey = jax.random.split(key)
         time_shape = (batch_size,)
         sample_shape = time_shape + data_shape
-        init_x = jax.random.normal(subkey, sample_shape)
-        init_x *= self.sde.diffusion(init_x, 1.)
+        init_x = self.sde.sample_prior(subkey, sample_shape)
         time_steps = jnp.linspace(1., eps, num_steps)
         step_size = time_steps[0] - time_steps[1]
         x = init_x

@@ -14,7 +14,7 @@ from sde import VESDE
 
 BATCH_SIZE = 256
 LEARNING_RATE = 1e-4
-STEPS = 200
+STEPS = 50
 PRINT_EVERY = 4
 SEED = 5678
 NUM_WORKERS = 4
@@ -28,12 +28,12 @@ unet = Unet(2, [1,16,32,64,128], AUTOENCODER_EMBED_DIM, key, group_norm_size = 3
 time_embed = eqx.nn.Sequential([
     eqx.nn.Linear(TIME_FEATURE, AUTOENCODER_EMBED_DIM, key=jax.random.PRNGKey(57104)),
     eqx.nn.Lambda(lambda x: jax.nn.swish(x))])
-sde = VESDE(300)
+sde_func = VESDE(N=300)
 sde = ScordBasedSDE(unet,
                     GaussianFourierFeatures(128, subkey),
                     time_embed,
                     lambda x: 1,
-                    sde,)
+                    sde_func,)
 
 optimizer = optax.adam(LEARNING_RATE)
 
@@ -44,13 +44,13 @@ normalise_data = torchvision.transforms.Compose(
     ]
 )
 train_dataset = torchvision.datasets.MNIST(
-    "MNIST",
+    "./data/MNIST",
     train=True,
     download=True,
     transform=normalise_data,
 )
 test_dataset = torchvision.datasets.MNIST(
-    "MNIST",
+    "./data/MNIST",
     train=False,
     download=True,
     transform=normalise_data,
@@ -118,6 +118,6 @@ def train(
     return best_model, opt_state
 
 print(jax.vmap(sde.loss)(jnp.array(next(iter(trainloader))[0]),jax.random.split(jax.random.PRNGKey(100),256)).mean())
-sde, opt_state = train(sde, trainloader, testloader, key, steps = STEPS, print_every=PRINT_EVERY)
+model, opt_state = train(sde, trainloader, testloader, key, steps = STEPS, print_every=PRINT_EVERY)
 key = jax.random.PRNGKey(9527)
-images = sde.sample((1,28,28) ,subkey, 300, 4)
+images = model.sample((1,28,28) ,subkey, 300, 4)
