@@ -11,6 +11,9 @@ import equinox as eqx
 import jax.experimental.mesh_utils as mesh_utils
 import jax.sharding as sharding
 from sde import VESDE
+import matplotlib.pyplot as plt
+from torchvision.utils import make_grid
+import numpy as np
 
 BATCH_SIZE = 256
 LEARNING_RATE = 1e-4
@@ -118,18 +121,30 @@ def train(
 
     return best_model, opt_state
 
-print(jax.vmap(model.loss)(jnp.array(next(iter(trainloader))[0]),jax.random.split(jax.random.PRNGKey(100),256)).mean())
-images = model.sample((1,28,28) , subkey, 100)
-model, opt_state = train(model, trainloader, testloader, key, steps = STEPS, print_every=PRINT_EVERY)
 key = jax.random.PRNGKey(9527)
-images = jax.vmap(model.sample, in_axes=(None,0, None))((1,28,28) ,jax.random.split(subkey,16), 1000)
 
-import matplotlib.pyplot as plt
-from torchvision.utils import make_grid
-import numpy as np
+print(jax.vmap(model.loss)(jnp.array(next(iter(trainloader))[0]),jax.random.split(jax.random.PRNGKey(100),256)).mean())
+mask = np.ones((1,28,28))
+mask[:,10:18,10:18] = 0
+key, subkey = jax.random.split(key)
+images = model.sample(subkey, (1,28,28) , 100)
+key, subkey = jax.random.split(key)
+inpainted_image = model.inpaint(subkey, jnp.array(next(iter(trainloader))[0][0]), mask, 300)
+model, opt_state = train(model, trainloader, testloader, key, steps = STEPS, print_every=PRINT_EVERY)
 
+key, subkey = jax.random.split(key)
+images = jax.vmap(model.sample, in_axes=(0, None, None))(jax.random.split(subkey,16), (1,28,28) , 1000)
 sample_grid = make_grid(torch.tensor(np.asarray(images[2])), nrow=int(np.sqrt(4)))
 plt.figure(figsize=(6,6))
 plt.axis('off')
 plt.imshow(sample_grid.permute(1, 2, 0).cpu(), vmin=0., vmax=1.)
-plt.savefig("./test")
+plt.savefig("./generate")
+
+key, subkey = jax.random.split(key)
+mask[:,12:16,12:16] = 0
+inpainted_image = jax.vmap(model.inpaint, in_axes=(0, 0, None, None))(jax.random.split(subkey,16), jnp.array(next(iter(trainloader))[0][:16]), mask, 300)
+sample_grid = make_grid(torch.tensor(np.asarray(inpainted_image[1])), nrow=int(np.sqrt(4)))
+plt.figure(figsize=(6,6))
+plt.axis('off')
+plt.imshow(sample_grid.permute(1, 2, 0).cpu(), vmin=0., vmax=1.)
+plt.savefig("./inpaint")
