@@ -1,3 +1,45 @@
+import argparse
+from tap import Tap
+from jaxtyping import PyTree, Float, Array, PRNGKeyArray
+from sde_score import ScordBasedSDE, GaussianFourierFeatures
+import jax
+import jax.numpy as jnp
+import optax
+import equinox as eqx
+from jax._src.distributed import initialize
+from jax.experimental.multihost_utils import process_allgather
+from torch.utils.data import DataLoader, random_split
+from torch.utils.data.distributed import DistributedSampler
+import numpy as np
+from clearml import Task, Logger
+
+class SDEDiffusionParser(Tap):
+    # Metadata about the experiment
+    data_path: str
+    experiment_name: str
+    distributed: bool = False
+
+    # Model hyperparameters
+    time_feature: int = 128
+    autoencoder_embed_dim: int = 256
+    hidden_layer: list[int] = [1,16,32,64,128]
+    group_norm_size: int = 32
+
+    # Training hyperparameters
+    n_epochs: int = 500
+    batch_size: int = 128
+    learning_rate: float = 1e-4
+    log_epoch: int = 2
+    seed: int = 2019612721831
+    num_workers: int = 8
+
+
+args = SDEDiffusionParser().parse_args()
+
+if args.distributed == True: initialize()
+n_processes = jax.process_count()
+if jax.process_index() == 0:
+    Task.init(project_name="DiffusionAstro", task_name=args.experiment_name)
 
 
 
