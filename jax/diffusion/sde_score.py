@@ -73,16 +73,16 @@ class ScordBasedSDE(eqx.Module):
         score = self.autoencoder(x, time_feature)/std
         return score
 
-    def sample(self, data_shape: tuple[int], key: PRNGKeyArray, eps: float = 1e-3) -> Array:
+    def sample(self, data_shape: tuple[int], key: PRNGKeyArray, n_steps:int, eps: float = 1e-3) -> Array:
         key, subkey = jax.random.split(key)
         x_init = self.sde.sample_prior(subkey, data_shape)
-        time_steps = jnp.linspace(self.sde.T, eps, self.sde.N)
+        time_steps = jnp.linspace(self.sde.T, eps, n_steps)
         step_size = time_steps[0] - time_steps[1]
         x = x_init
         x_mean = x_init
         for time_step in tqdm.tqdm(time_steps):      
             drift, diffusion = self.sde.reverse_sde(x, time_step.reshape(1), self.score)
-            x_mean = x + drift * step_size
+            x_mean = x - drift * step_size
             key, subkey = jax.random.split(key)
             x = x_mean + diffusion* jnp.sqrt(step_size) * jax.random.normal(subkey, x.shape)      
         # Do not include any noise in the last sampling step.

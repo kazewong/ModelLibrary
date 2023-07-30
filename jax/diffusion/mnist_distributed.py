@@ -12,6 +12,7 @@ from torch.utils.data import DataLoader
 from torch.utils.data.distributed import DistributedSampler
 import numpy as np
 from clearml import Task
+from sde import VESDE
 
 BATCH_SIZE = 256
 LEARNING_RATE = 1e-4
@@ -28,30 +29,19 @@ if jax.process_index() == 0:
     print(jax.process_count())
     print(jax.devices())
     print(jax.local_device_count())
-    mlflow.log_params({
-        "batch_size": BATCH_SIZE,
-        "learning_rate": LEARNING_RATE,
-        "steps": STEPS,
-        "seed": SEED,
-        "num_workers": NUM_WORKERS,
-        "time_feature": TIME_FEATURE,
-        "autoencoder_embed_dim": AUTOENCODER_EMBED_DIM,
-        "process_count": jax.process_count(),
-        "device_count": len(jax.devices()),
-    })
+
 
 key = jax.random.PRNGKey(SEED)
 key, subkey = jax.random.split(key)
 
 unet = Unet(2, [1,16,32,64,128], AUTOENCODER_EMBED_DIM, key, group_norm_size = 32)
 time_embed = eqx.nn.Linear(TIME_FEATURE, AUTOENCODER_EMBED_DIM, key=jax.random.PRNGKey(57104))
-sde = ScordBasedSDE(unet,
-                    lambda x: 1,
-                    lambda x: 1.0,
-                    lambda x: 25**x,
-                    lambda x: jnp.sqrt((25**(2 * x) - 1.) / 2. / jnp.log(25)),
+sde_func = VESDE(sigma_min=0.3,sigma_max=10,N=300) # Choosing the sigma drastically affects the training speed
+model = ScordBasedSDE(unet,
                     GaussianFourierFeatures(128, subkey),
-                    time_embed)
+                    time_embed,
+                    lambda x: 1,
+                    sde_func,)
 
 optimizer = optax.adam(LEARNING_RATE)
 
@@ -111,7 +101,7 @@ def train(
     print_every: int = 100,
 ):
 
-    opt_state = optimizer.init(eqx.filter(sde, eqx.is_array))
+    opt_state = optimizer.init(eqx.filter(model, eqx.is_array))
 
     @eqx.filter_jit
     def train_step(
@@ -201,11 +191,11 @@ def train(
                 max_loss = test_loss
                 best_model = model
             if jax.process_index() == 0:
-                mlflow.log_metric(key="training_loss", value=train_loss, step=step)
-                mlflow.log_metric(key="test_loss", value=test_loss, step=step)
-                best_model.save_model(mlflow.get_artifact_uri()[7:] + "/best_model")
-
+                print(f"Step: {step}, Train Loss: {train_loss}, Test Loss: {test_loss}")
+                
+            
     return best_model, opt_state
 
-sde, opt_state = train(sde, trainloader, testloader, key, steps = STEPS, print_every=PRINT_EVERY)
-mlflow.end_run()
+model, opt_state = train(model, trainloader, testloader, key, steps = STEPS, print_every=PRINT_EVERY)
+if jax.process_index() == 0:
+    images = model.sample((1,28,28) ,subkey)
