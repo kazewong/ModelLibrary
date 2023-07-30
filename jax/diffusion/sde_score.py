@@ -162,8 +162,8 @@ class ScordBasedSDE(eqx.Module):
         return score
 
     def sample(self,
-                data_shape: tuple[int],
                 key: PRNGKeyArray,
+                data_shape: tuple[int],
                 n_steps:int,
                 eps: float = 1e-3,
                 ) -> tuple[Array, Array, PRNGKeyArray]:
@@ -182,8 +182,34 @@ class ScordBasedSDE(eqx.Module):
             x, x_mean = self.corrector(subkey, x, time_step, step_size)
         return key, x, x_mean
 
-    def inpaint(self):
-        raise NotImplementedError
+    def inpaint(self,
+                key: PRNGKeyArray,
+                data: Array,
+                mask: Array,
+                n_steps:int,):
+        self.predictor.score = self.score
+        self.corrector.score = self.score
+        key, subkey = jax.random.split(key)
+        x_init = self.sde.sample_prior(subkey, data.shape) * (1. - mask)
+        time_steps = jnp.linspace(self.sde.T, eps, n_steps)
+        for time_step in time_steps:
+            key, subkey = jax.random.split(key)
+            x, x_mean = self.predictor(subkey, x, time_step, step_size)
+            
+            key, subkey = jax.random.split(key)
+            masked_data_mean, std = self.sde.marginal_prob(data, time_step)
+            masked_data = masked_data_mean + std * jax.random.normal(subkey, data.shape)
+            x = x * (1. - mask) + masked_data * mask
+            x_mean = x_mean * (1. - mask) + masked_data_mean * mask
+
+            key, subkey = jax.random.split(key)
+            x, x_mean = self.corrector(subkey, x, time_step, step_size)
+
+            key, subkey = jax.random.split(key)
+            mask_data = masked_data_mean + std * jax.random.normal(subkey, data.shape) # Not sure if resampling is necessary
+            x = x * (1. - mask) + mask_data * mask
+            x_mean = x_mean * (1. - mask) + masked_data_mean * mask
+        return x, x_mean
 
     def colorize(self):
         raise NotImplementedError
