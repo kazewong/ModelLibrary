@@ -137,7 +137,8 @@ class ScordBasedSDE(eqx.Module):
             self.predictor = predictor
         if corrector is None:
             corrector = NoneCorrector(self.sde, self.score, 0, 1)
-        self.corrector = corrector(self.sde, self.score, 0, 1)
+        corrector.score = self.score
+        self.corrector = corrector
 
     def __call__(self, x: Array, key: PRNGKeyArray, eps: float = 1e-5) -> Array:
         return self.loss(x, key, eps)

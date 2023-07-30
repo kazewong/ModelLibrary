@@ -14,7 +14,7 @@ from sde import VESDE
 
 BATCH_SIZE = 256
 LEARNING_RATE = 1e-4
-STEPS = 200
+STEPS = 20
 PRINT_EVERY = 4
 SEED = 5678
 NUM_WORKERS = 4
@@ -34,7 +34,7 @@ model = ScordBasedSDE(unet,
                     time_embed,
                     lambda x: 1,
                     sde_func,
-                    corrector=LangevinCorrector)
+                    corrector=LangevinCorrector(sde_func, lambda x: x, 0.17, 1))
 
 optimizer = optax.adam(LEARNING_RATE)
 
@@ -122,7 +122,7 @@ print(jax.vmap(model.loss)(jnp.array(next(iter(trainloader))[0]),jax.random.spli
 images = model.sample((1,28,28) , subkey, 100)
 model, opt_state = train(model, trainloader, testloader, key, steps = STEPS, print_every=PRINT_EVERY)
 key = jax.random.PRNGKey(9527)
-images = jax.vmap(model.sample, in_axes=(None,0, None))((1,28,28) ,jax.random.split(subkey,16), 1000)
+images = jax.vmap(model.sample, in_axes=(None,0, None))((1,28,28) ,jax.random.split(subkey,16), 200)
 
 import matplotlib.pyplot as plt
 from torchvision.utils import make_grid
