@@ -89,8 +89,7 @@ class SDETrainer:
         sde_func = VESDE(sigma_min=0.3,sigma_max=10,N=1000) # Choosing the sigma drastically affects the training speed
         self.model = ScordBasedSDE(unet,
                                     gaussian_feature,
-                                    time_embed
-                                    lambda x: 1,
+                                    time_embed,
                                     lambda x: 1,
                                     sde_func,
                                     corrector=LangevinCorrector(sde_func, lambda x: x, 0.017, 1),)
