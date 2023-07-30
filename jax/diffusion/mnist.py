@@ -14,7 +14,7 @@ from sde import VESDE
 
 BATCH_SIZE = 256
 LEARNING_RATE = 1e-4
-STEPS = 50
+STEPS = 200
 PRINT_EVERY = 4
 SEED = 5678
 NUM_WORKERS = 4
@@ -28,7 +28,7 @@ unet = Unet(2, [1,16,32,64,128], AUTOENCODER_EMBED_DIM, key, group_norm_size = 3
 time_embed = eqx.nn.Sequential([
     eqx.nn.Linear(TIME_FEATURE, AUTOENCODER_EMBED_DIM, key=jax.random.PRNGKey(57104)),
     eqx.nn.Lambda(lambda x: jax.nn.swish(x))])
-sde_func = VESDE(sigma_min=0.3,sigma_max=10,N=1000) # Choosing the sigma drastically affects the training speed
+sde_func = VESDE(sigma_min=0.3,sigma_max=30,N=1000) # Choosing the sigma drastically affects the training speed
 model = ScordBasedSDE(unet,
                     GaussianFourierFeatures(128, subkey),
                     time_embed,
