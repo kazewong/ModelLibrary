@@ -12,11 +12,14 @@ from torch.utils.data import DataLoader, random_split
 from torch.utils.data.distributed import DistributedSampler
 import numpy as np
 from clearml import Task, Logger
+from common.Unet import Unet
+from diffusion.sde import VESDE
 
 class SDEDiffusionParser(Tap):
     # Metadata about the experiment
     data_path: str
     experiment_name: str
+    project_name: str = "DiffusionAstro"
     distributed: bool = False
 
     # Model hyperparameters
@@ -39,9 +42,7 @@ args = SDEDiffusionParser().parse_args()
 if args.distributed == True: initialize()
 n_processes = jax.process_count()
 if jax.process_index() == 0:
-    Task.init(project_name="DiffusionAstro", task_name=args.experiment_name)
-
-
+    Task.init(project_name=args.project_name, task_name=args.experiment_name)
 
 class SDETrainer:
 
@@ -54,7 +55,7 @@ class SDETrainer:
         self.global_mesh = jax.sharding.Mesh(devices, ('b'))
         self.sharding = jax.sharding.NamedSharding(self.global_mesh, jax.sharding.PartitionSpec(('b'),))
 
-        train_set, test_set = random_split(GalaxyZooImageDataset(config.data_path),[0.8,0.2])
+        train_set, test_set = #Fill here 
         train_sampler = DistributedSampler(train_set,
                                            num_replicas=n_processes,
                                            rank=jax.process_index(),
@@ -159,7 +160,7 @@ class SDETrainer:
         key: PRNGKeyArray,
         epoch: int,
         log_loss: bool = False,
-    ):
+    ) -> tuple[ScordBasedSDE, PyTree, Array | float]:
         self.train_loader.sampler.set_epoch(epoch)
         train_loss = 0
         for batch in trainloader:
@@ -171,8 +172,8 @@ class SDETrainer:
             global_batch = jax.make_array_from_single_device_arrays(global_shape, self.sharding, arrays)
             model, opt_state, loss_values = self.train_step(model, opt_state, global_batch, subkey, self.optimizer.update)
             if log_loss: train_loss += jnp.sum(process_allgather(loss_values))
-            train_loss = train_loss/ jax.process_count()
-            return model, opt_state, train_loss
+        train_loss = train_loss/ jax.process_count()
+        return model, opt_state, train_loss
 
     def test_epoch(self,
         model: ScordBasedSDE,
