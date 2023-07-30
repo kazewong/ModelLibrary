@@ -3,7 +3,7 @@ import jax
 import jax.numpy as jnp
 from jaxtyping import Array, PRNGKeyArray
 from typing import Callable
-from sde import SDE
+from kazeML.jax.diffusion.sde import SDE
 from abc import ABC, abstractmethod
 from tqdm import tqdm
 

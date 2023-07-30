@@ -1,7 +1,6 @@
 import argparse
 from tap import Tap
 from jaxtyping import PyTree, Float, Array, PRNGKeyArray
-from sde_score import ScordBasedSDE, GaussianFourierFeatures
 import jax
 import jax.numpy as jnp
 import optax
@@ -12,8 +11,9 @@ from torch.utils.data import DataLoader, random_split
 from torch.utils.data.distributed import DistributedSampler
 import numpy as np
 from clearml import Task, Logger
-from common.Unet import Unet
-from diffusion.sde import VESDE
+from kazeML.jax.diffusion.sde_score import ScordBasedSDE, GaussianFourierFeatures, LangevinCorrector
+from kazeML.jax.common.Unet import Unet
+from kazeML.jax.diffusion.sde import VESDE
 
 class SDEDiffusionParser(Tap):
     # Metadata about the experiment

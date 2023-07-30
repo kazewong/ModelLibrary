@@ -1,6 +1,5 @@
 from jaxtyping import PyTree, Float, Array, PRNGKeyArray
-from sde_score import ScordBasedSDE, GaussianFourierFeatures, LangevinCorrector
-from common.Unet import Unet
+
 import jax
 import jax.numpy as jnp
 import torchvision
@@ -10,10 +9,14 @@ import optax
 import equinox as eqx
 import jax.experimental.mesh_utils as mesh_utils
 import jax.sharding as sharding
-from sde import VESDE
+
 import matplotlib.pyplot as plt
 from torchvision.utils import make_grid
 import numpy as np
+
+from kazeML.jax.diffusion.sde_score import ScordBasedSDE, GaussianFourierFeatures, LangevinCorrector
+from kazeML.jax.common.Unet import Unet
+from kazeML.jax.diffusion.sde import VESDE
 
 BATCH_SIZE = 256
 LEARNING_RATE = 1e-4

@@ -1,6 +1,4 @@
 from jaxtyping import PyTree, Float, Array, PRNGKeyArray
-from sde_score import ScordBasedSDE, GaussianFourierFeatures
-from common.Unet import Unet
 import jax
 import jax.numpy as jnp
 import torchvision
@@ -12,7 +10,10 @@ from torch.utils.data import DataLoader
 from torch.utils.data.distributed import DistributedSampler
 import numpy as np
 from clearml import Task
-from sde import VESDE
+from kazeML.jax.diffusion.sde import VESDE
+from kazeML.jax.diffusion.sde_score import ScordBasedSDE, GaussianFourierFeatures
+from kazeML.jax.common.Unet import Unet
+
 
 BATCH_SIZE = 256
 LEARNING_RATE = 1e-4
