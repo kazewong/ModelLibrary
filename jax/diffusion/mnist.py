@@ -14,7 +14,7 @@ from sde import VESDE
 
 BATCH_SIZE = 256
 LEARNING_RATE = 1e-4
-STEPS = 20
+STEPS = 50
 PRINT_EVERY = 4
 SEED = 5678
 NUM_WORKERS = 4
@@ -28,13 +28,13 @@ unet = Unet(2, [1,16,32,64,128], AUTOENCODER_EMBED_DIM, key, group_norm_size = 3
 time_embed = eqx.nn.Sequential([
     eqx.nn.Linear(TIME_FEATURE, AUTOENCODER_EMBED_DIM, key=jax.random.PRNGKey(57104)),
     eqx.nn.Lambda(lambda x: jax.nn.swish(x))])
-sde_func = VESDE(sigma_min=0.3,sigma_max=30,N=1000) # Choosing the sigma drastically affects the training speed
+sde_func = VESDE(sigma_min=0.3,sigma_max=10,N=1000) # Choosing the sigma drastically affects the training speed
 model = ScordBasedSDE(unet,
                     GaussianFourierFeatures(128, subkey),
                     time_embed,
                     lambda x: 1,
                     sde_func,
-                    corrector=LangevinCorrector(sde_func, lambda x: x, 0.17, 1))
+                    corrector=LangevinCorrector(sde_func, lambda x: x, 0.017, 1))
 
 optimizer = optax.adam(LEARNING_RATE)
 
@@ -122,13 +122,13 @@ print(jax.vmap(model.loss)(jnp.array(next(iter(trainloader))[0]),jax.random.spli
 images = model.sample((1,28,28) , subkey, 100)
 model, opt_state = train(model, trainloader, testloader, key, steps = STEPS, print_every=PRINT_EVERY)
 key = jax.random.PRNGKey(9527)
-images = jax.vmap(model.sample, in_axes=(None,0, None))((1,28,28) ,jax.random.split(subkey,16), 200)
+images = jax.vmap(model.sample, in_axes=(None,0, None))((1,28,28) ,jax.random.split(subkey,16), 1000)
 
 import matplotlib.pyplot as plt
 from torchvision.utils import make_grid
 import numpy as np
 
-sample_grid = make_grid(torch.tensor(np.asarray(images)), nrow=int(np.sqrt(4)))
+sample_grid = make_grid(torch.tensor(np.asarray(images[2])), nrow=int(np.sqrt(4)))
 plt.figure(figsize=(6,6))
 plt.axis('off')
 plt.imshow(sample_grid.permute(1, 2, 0).cpu(), vmin=0., vmax=1.)

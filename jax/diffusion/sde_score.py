@@ -167,18 +167,20 @@ class ScordBasedSDE(eqx.Module):
                 n_steps:int,
                 eps: float = 1e-3,
                 ) -> tuple[Array, Array, PRNGKeyArray]:
+        self.predictor.score = self.score
+        self.corrector.score = self.score
         key, subkey = jax.random.split(key)
         x_init = self.sde.sample_prior(subkey, data_shape)
         time_steps = jnp.linspace(self.sde.T, eps, n_steps)
         step_size = time_steps[0] - time_steps[1]
-        x = x_mean = x_init
+        x = x_init
 
         for time_step in time_steps:
             key, subkey = jax.random.split(key)
             x, x_mean = self.predictor(subkey, x, time_step, step_size)
             key, subkey = jax.random.split(key)
             x, x_mean = self.corrector(subkey, x, time_step, step_size)
-        return x, x_mean, key
+        return key, x, x_mean
 
     def inpaint(self):
         raise NotImplementedError
