@@ -1,5 +1,5 @@
 from jaxtyping import PyTree, Float, Array, PRNGKeyArray
-from sde_score import ScordBasedSDE, GaussianFourierFeatures
+from sde_score import ScordBasedSDE, GaussianFourierFeatures, LangevinCorrector
 from common.Unet import Unet
 import jax
 import jax.numpy as jnp
@@ -33,7 +33,8 @@ model = ScordBasedSDE(unet,
                     GaussianFourierFeatures(128, subkey),
                     time_embed,
                     lambda x: 1,
-                    sde_func,)
+                    sde_func,
+                    corrector=LangevinCorrector)
 
 optimizer = optax.adam(LEARNING_RATE)
 
@@ -118,6 +119,7 @@ def train(
     return best_model, opt_state
 
 print(jax.vmap(model.loss)(jnp.array(next(iter(trainloader))[0]),jax.random.split(jax.random.PRNGKey(100),256)).mean())
+images = model.sample((1,28,28) , subkey, 100)
 model, opt_state = train(model, trainloader, testloader, key, steps = STEPS, print_every=PRINT_EVERY)
 key = jax.random.PRNGKey(9527)
 images = jax.vmap(model.sample, in_axes=(None,0, None))((1,28,28) ,jax.random.split(subkey,16), 1000)
