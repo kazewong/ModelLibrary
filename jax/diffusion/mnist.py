@@ -142,7 +142,7 @@ plt.savefig("./generate")
 
 key, subkey = jax.random.split(key)
 mask[:,12:16,12:16] = 0
-inpainted_image = jax.vmap(model.inpaint, in_axes=(0, 0, None, None))(jax.random.split(subkey,16), jnp.array(next(iter(trainloader))[0][:16]), mask, 300)
+inpainted_image = jax.vmap(model.inpaint, in_axes=(0, 0, None, None))(jax.random.split(subkey,16), jnp.array(next(iter(trainloader))[0][:16]), mask, 1000)
 sample_grid = make_grid(torch.tensor(np.asarray(inpainted_image[1])), nrow=int(np.sqrt(4)))
 plt.figure(figsize=(6,6))
 plt.axis('off')

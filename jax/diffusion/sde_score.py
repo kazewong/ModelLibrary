@@ -5,6 +5,7 @@ from jaxtyping import Array, PRNGKeyArray
 from typing import Callable
 from sde import SDE
 from abc import ABC, abstractmethod
+from tqdm import tqdm
 
 class GaussianFourierFeatures(eqx.Module):
 
@@ -175,7 +176,7 @@ class ScordBasedSDE(eqx.Module):
         step_size = time_steps[0] - time_steps[1]
         x = x_init
 
-        for time_step in time_steps:
+        for time_step in tqdm(time_steps):
             key, subkey = jax.random.split(key)
             x, x_mean = self.predictor(subkey, x, time_step, step_size)
             key, subkey = jax.random.split(key)
@@ -196,7 +197,7 @@ class ScordBasedSDE(eqx.Module):
         step_size = time_steps[0] - time_steps[1]
         x = x_init
 
-        for time_step in time_steps:
+        for time_step in tqdm(time_steps):
             key, subkey = jax.random.split(key)
             x, x_mean = self.predictor(subkey, x, time_step, step_size)
             
