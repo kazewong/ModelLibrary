@@ -1,19 +1,19 @@
-import argparse
 from tap import Tap
 from jaxtyping import PyTree, Float, Array, PRNGKeyArray
 import jax
 import jax.numpy as jnp
 import optax
 import equinox as eqx
+import numpy as np
 from jax._src.distributed import initialize
 from jax.experimental.multihost_utils import process_allgather
 from torch.utils.data import DataLoader, random_split
 from torch.utils.data.distributed import DistributedSampler
-import numpy as np
 from clearml import Task, Logger
-from kazeML.jax.diffusion.sde_score import ScordBasedSDE, GaussianFourierFeatures, LangevinCorrector
 from kazeML.jax.common.Unet import Unet
 from kazeML.jax.diffusion.sde import VESDE
+from kazeML.jax.diffusion.sde_score import ScordBasedSDE, GaussianFourierFeatures, LangevinCorrector
+import numpy as np
 
 class SDEDiffusionParser(Tap):
     # Metadata about the experiment
@@ -25,31 +25,27 @@ class SDEDiffusionParser(Tap):
     # Model hyperparameters
     time_feature: int = 128
     autoencoder_embed_dim: int = 256
-    hidden_layer: list[int] = [1,16,32,64,128]
+    hidden_layer: list[int] = [3,16,32,64,128]
     group_norm_size: int = 32
 
     # Training hyperparameters
     n_epochs: int = 500
-    batch_size: int = 128
+    batch_size: int = 16
     learning_rate: float = 1e-4
     log_epoch: int = 2
     seed: int = 2019612721831
     num_workers: int = 8
 
 
-args = SDEDiffusionParser().parse_args()
 
-if args.distributed == True: initialize()
-n_processes = jax.process_count()
-if jax.process_index() == 0:
-    Task.init(project_name=args.project_name, task_name=args.experiment_name)
-
-class SDETrainer:
+class SDEDiffusionTrainer:
 
     def __init__(self,
-                config: argparse.Namespace, logging: bool = False):
+                config: SDEDiffusionParser, logging: bool = False):
         self.config = config
         self.logging = logging
+        if logging and (jax.process_index() == 0):
+            Task.init(project_name=args.project_name, task_name=args.experiment_name)
 
         devices = np.array(jax.devices())
         self.global_mesh = jax.sharding.Mesh(devices, ('b'))
@@ -81,7 +77,7 @@ class SDETrainer:
 
 
         self.key, subkey = jax.random.split(jax.random.PRNGKey(config.seed))
-        unet = Unet(1, config.hidden_layer, config.autoencoder_embed_dim, subkey, group_norm_size=config.group_norm_size)
+        unet = Unet(len(self.data_shape)-1, config.hidden_layer, config.autoencoder_embed_dim, subkey, group_norm_size=config.group_norm_size)
         self.key, subkey = jax.random.split(self.key)
         time_embed = eqx.nn.Linear(config.time_feature, config.autoencoder_embed_dim, key=subkey)
         self.key, subkey = jax.random.split(self.key)
@@ -165,13 +161,13 @@ class SDETrainer:
         for batch in trainloader:
             key, subkey = jax.random.split(key)
             local_batch = jnp.array(batch)
-            global_shape = (jax.process_count() * local_batch.shape[0], ) + (1,) + self.data_shape
+            global_shape = (jax.process_count() * local_batch.shape[0], ) + self.data_shape
 
             arrays = jax.device_put(jnp.split(local_batch, len(self.global_mesh.local_devices), axis = 0), self.global_mesh.local_devices)
             global_batch = jax.make_array_from_single_device_arrays(global_shape, self.sharding, arrays)
             model, opt_state, loss_values = self.train_step(model, opt_state, global_batch, subkey, self.optimizer.update)
             if log_loss: train_loss += jnp.sum(process_allgather(loss_values))
-        train_loss = train_loss/ jax.process_count()
+        train_loss = train_loss/ jax.process_count() / len(trainloader) /np.sum(self.data_shape)
         return model, opt_state, train_loss
 
     def test_epoch(self,
@@ -185,10 +181,26 @@ class SDETrainer:
         for batch in testloader:
             key, subkey = jax.random.split(key)
             local_batch = jnp.array(batch)
-            global_shape = (jax.process_count() * local_batch.shape[0], ) + (1,) + self.data_shape
+            global_shape = (jax.process_count() * local_batch.shape[0], ) + self.data_shape
 
             arrays = jax.device_put(jnp.split(local_batch, len(self.global_mesh.local_devices), axis = 0), self.global_mesh.local_devices)
             global_batch = jax.make_array_from_single_device_arrays(global_shape, self.sharding, arrays)
             test_loss += jnp.sum(process_allgather(self.test_step(model, global_batch, subkey)))
-        test_loss_values = test_loss/ jax.process_count()
+        test_loss_values = test_loss/ jax.process_count() / len(testloader) /np.sum(self.data_shape)
         return test_loss_values
+
+if __name__ == "__main__":
+
+    args = SDEDiffusionParser().parse_args()
+
+    if args.distributed == True:
+        initialize()
+        print(jax.process_count())
+
+    n_processes = jax.process_count()
+    if jax.process_index() == 0:
+        trainer = SDEDiffusionTrainer(args, logging=True)
+        trainer.train()
+    else:
+        trainer = SDEDiffusionTrainer(args, logging=False)
+        trainer.train()
