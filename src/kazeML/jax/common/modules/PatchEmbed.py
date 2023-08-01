@@ -48,6 +48,8 @@ class PatchEmbed(eqx.Module):
                                     padding=0,
                                     key=key)
 
+    def __call__(self, x: Array, flatten_channels: bool = True) -> Array:
+        return self.image_to_patch(x, flatten_channels)
 
     def image_to_patch(self, x: Array, flatten_channels: bool = True) -> Array:
         """
