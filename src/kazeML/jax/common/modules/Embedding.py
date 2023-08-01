@@ -3,9 +3,50 @@ from dataclasses import dataclass, field
 import jax
 import jax.numpy as jnp
 from jaxtyping import Array, PRNGKeyArray
-from typing import Callable, Union, Optional
+from abc import abstractmethod
 
-class PatchEmbed(eqx.Module):
+class EmbedBase(eqx.Module):
+
+    def __call__(self,
+                x: Array,) -> Array:
+        return self.embed(x)
+
+    @abstractmethod
+    def embed(self,
+            x: Array,) -> Array:
+        raise NotImplementedError
+
+
+class ClassEmbed(EmbedBase):
+
+    """
+    Normal embedding based on a bag of vocabulary.
+    TODO: This is not completed and cannot be used yet.
+    """
+    
+    _num_embeddings: int
+    _embed_dim: int
+    padding_idx: int
+    learned: bool = False
+
+    def __init__(self,
+                 num_embeddings: int,
+                 embed_dim: int,
+                 padding_idx: int = 0,
+                 learned: bool = False):
+        super().__init__()
+        self._num_embeddings = num_embeddings
+        self._embed_dim = embed_dim
+        self.padding_idx = padding_idx
+        self.learned = learned
+
+    def embed(self, x: Array) -> Array:
+        return super().embed(x)
+class PatchEmbed(EmbedBase):
+
+    """
+    Patch Embedding module used in Vision Transformer.
+    """
 
     _patch_size: int
     _img_size: int
@@ -49,9 +90,9 @@ class PatchEmbed(eqx.Module):
                                     key=key)
 
     def __call__(self, x: Array, flatten_channels: bool = True) -> Array:
-        return self.image_to_patch(x, flatten_channels)
+        return self.embed(x, flatten_channels)
 
-    def image_to_patch(self, x: Array, flatten_channels: bool = True) -> Array:
+    def embed(self, x: Array, flatten_channels: bool = True) -> Array:
         """
         Args:
             x (Array): Input image of shape (Channels, Height, Width)
@@ -74,7 +115,7 @@ def test_patch_embed():
     x = jnp.ones(input_shape)
 
     # Test the image_to_patch method
-    patches = patch_embed.image_to_patch(x)
+    patches = patch_embed.embed(x)
     assert patches.shape == (64, 196)
 
     # Test the conv layer output shape
