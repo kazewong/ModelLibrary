@@ -7,8 +7,11 @@ from abc import abstractmethod
 
 class EmbedBase(eqx.Module):
 
+    def __init__(self):
+        super().__init__()
+
     def __call__(self,
-                x: Array,) -> Array:
+                x: Array) -> Array:
         return self.embed(x)
 
     @abstractmethod
@@ -19,6 +22,7 @@ class EmbedBase(eqx.Module):
 class PositionalEmbedding(EmbedBase):
 
     embedding: Array
+    padding_idx: int
 
     @property
     def max_len(self) -> int:
@@ -31,9 +35,11 @@ class PositionalEmbedding(EmbedBase):
     def __init__(self,
                  key: PRNGKeyArray,
                  max_len: int,
-                 embed_dim: int):
+                 embed_dim: int,
+                 padding_idx: int = 0,):
         super().__init__()
         self.embeddin = jax.random.normal(key, (1+max_len, embed_dim))
+        self.padding_idx = padding_idx
 
     def embed(self, x: Array) -> Array:
         raise NotImplementedError

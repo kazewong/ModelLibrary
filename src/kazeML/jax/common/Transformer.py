@@ -23,6 +23,10 @@ class TransformerConfig:
         default=None, metadata={"help": "path to pre-trained embedding"}
     )
 
+    layernorm_embedding: bool = field(
+        default=False, metadata={"help": "add layernorm after embedding"}
+    )
+
     ffn_embed_dim: int = field(
         default=2048, metadata={"help": "embedding dimension for feed-forward network"}
     )
@@ -133,9 +137,11 @@ class TransformerEncoder(eqx.Module):
 
     token_embedding: EmbedBase
     positional_embedding: PositionalEmbedding
+    embedding_layer_norm: eqx.nn.LayerNorm | None
+
     attention_blocks: list
     dropout_block: eqx.nn.Dropout
-    feedforward_head: eqx.nn.Sequential
+    layer_norm: eqx.nn.LayerNorm
 
     def __init__(self,
                 cfg: TransformerConfig,
@@ -149,6 +155,9 @@ class TransformerEncoder(eqx.Module):
         key, subkey = jax.random.split(key)
         self.positional_embedding = PositionalEmbedding(subkey, cfg.max_length, cfg.embed_dim)
 
+        # Set embedding layer norm
+        if cfg.layernorm_embedding: self.embedding_layer_norm = eqx.nn.LayerNorm(shape=cfg.embed_dim)
+
         # Setup attention blocks
         self.attention_blocks = []
         for i in range(cfg.layers):
@@ -158,17 +167,34 @@ class TransformerEncoder(eqx.Module):
         # Setup dropout block
         self.dropout_block = eqx.nn.Dropout(p=cfg.dropout)
 
-
+        # Setup layer norm
+        self.layer_norm = eqx.nn.LayerNorm(shape=cfg.embed_dim)
     
-    def __call__(self, tokens: Array) -> Array:
-        return self.forward(tokens)
+    def __call__(self,
+                key: PRNGKeyArray,
+                tokens: Array,
+                mask: Optional[Array] = None,) -> Array:
+        return self.forward(key, tokens, mask)
     
     def embed(self, tokens: Array) -> Array:
-        raise NotImplementedError
+        embedding = self.token_embedding(tokens) + self.positional_embedding(tokens)
+        embedding = self.dropout_block(embedding)
+        if self.embedding_layer_norm is not None: embedding = self.embedding_layer_norm(embedding)
+        return embedding
     
-    def forward(self, tokens: Array) -> Array:
-        raise NotImplementedError
-    
+    def forward(self,
+                key: PRNGKeyArray,
+                tokens: Array,
+                mask: Optional[Array] = None,
+                ) -> Array:
+        x = self.embed(tokens)
+        for block in self.attention_blocks:
+            key, subkey = jax.random.split(key)
+            x = block(subkey, x, mask) # TODO: Need to figure how to better mask
+
+        x = self.layer_norm(x)
+        return x
+
 class TransformerDecoder(eqx.Module):
 
     def __init__(self):
