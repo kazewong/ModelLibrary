@@ -2,7 +2,7 @@
 # Inspired by Fairseq's Data2Vec vision Model
 
 import equinox as eqx
-from dataclasses import dataclass, field
+from chex import dataclass
 import jax
 import jax.numpy as jnp
 from jaxtyping import Array, PRNGKeyArray
@@ -15,13 +15,8 @@ class Data2VecVisionConfig:
 
     seed: int = 0
 
-    layer_scale_init_value: float = field(
-        default=1e-4, metadata={"help": "rescale layer outputs, 0 to disable"}
-    )
-    num_mask_patches: int = field(
-        default=75,
-        metadata={"help": "number of the visual tokens/patches need be masked"},
-    )
+    layer_scale_init_value: float = 1e-4
+    num_mask_patches: int = 75
     min_mask_patches_per_block: int = 16
     max_mask_patches_per_block: int = 196
     image_size: int = 224
@@ -74,3 +69,4 @@ class Data2VecVision(eqx.Module):
                 img: Array,
                 mask: bool = True) -> Array:
         x = self.patch_embed(img)
+        raise NotImplementedError
