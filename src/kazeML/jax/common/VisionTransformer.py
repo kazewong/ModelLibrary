@@ -3,6 +3,7 @@ import jax.numpy as jnp
 import equinox as eqx
 from jaxtyping import Array, PRNGKeyArray
 from typing import Callable
+from kazeML.jax.common.modules.Embedding import PositionalEmbedding
 
 class AttentionBlock(eqx.Module):
 
@@ -54,7 +55,7 @@ class VIT(eqx.Module):
     dropout_block: eqx.nn.Dropout
     feedforward_head: eqx.nn.Sequential
     patch_size: int
-    position_embedding: Array
+    position_embedding: PositionalEmbedding
     class_token: Array
 
     def __init__(self,
@@ -74,8 +75,10 @@ class VIT(eqx.Module):
         key, subkey = jax.random.split(key)
         self.linear_projector = eqx.nn.Linear(patch_size*patch_size*num_channels, embed_dim, key=subkey)
 
-        key, subkey = jax.random.split(key)
-        self.attention_blocks = [AttentionBlock(key, embed_dim, hidden_dim, num_heads, dropout_prob) for _ in range(num_layers)]
+        self.attention_blocks = []
+        for i in range(num_layers):
+            key, subkey = jax.random.split(key)
+            self.attention_blocks.append(AttentionBlock(subkey, embed_dim, hidden_dim, num_heads, dropout_prob) for _ in range(num_layers))
 
         self.dropout_block = eqx.nn.Dropout(dropout_prob)
 
@@ -90,7 +93,7 @@ class VIT(eqx.Module):
         self.class_token = jax.random.normal(key, (1, embed_dim))
 
         key, subkey = jax.random.split(key)
-        self.position_embedding = jax.random.normal(key, (1+num_patches, embed_dim))
+        self.position_embedding = PositionalEmbedding(max_len=num_patches, embed_dim=embed_dim, key=subkey)
 
     def __call__(self, x: Array, key: PRNGKeyArray, inference: bool = False) -> Array:
         """
@@ -105,7 +108,7 @@ class VIT(eqx.Module):
         x = jax.vmap(self.linear_projector)(x)
 
         x = jnp.concatenate([self.class_token, x], axis=0)
-        x = x + self.position_embedding[:N+1]
+        x = x + self.position_embedding(x)
 
         key, subkey = jax.random.split(key)
         x = self.dropout_block(x, key=subkey, inference=inference)

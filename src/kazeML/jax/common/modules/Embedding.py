@@ -75,6 +75,7 @@ class PatchEmbedding(EmbedBase):
     _in_channels: int
     _embed_dim: int
     conv: eqx.nn.Conv2d
+    linear: eqx.nn.Linear
 
     @property
     def patch_size(self) -> int:
@@ -104,12 +105,18 @@ class PatchEmbedding(EmbedBase):
         self._in_channels = in_channels
         self._embed_dim = embed_dim
 
+        key, subkey = jax.random.split(key)
         self.conv = eqx.nn.Conv2d(in_channels=in_channels,
                                     out_channels=embed_dim,
                                     kernel_size=patch_size,
                                     stride=patch_size,
                                     padding=0,
-                                    key=key)
+                                    key=subkey)
+
+        key, subkey = jax.random.split(key)
+        self.linear = eqx.nn.Linear(in_features=patch_size*patch_size*in_channels,
+                                    out_features=embed_dim,
+                                    key=subkey)
 
     def __call__(self, x: Array, flatten_channels: bool = True) -> Array:
         return self.embed(x, flatten_channels)
@@ -130,7 +137,7 @@ class PatchEmbedding(EmbedBase):
 
 def test_patch_embed():
     # Create a PatchEmbed instance
-    patch_embed = PatchEmbed(key=jax.random.PRNGKey(0),patch_size=16, img_size=224, in_channels=3, embed_dim=64)
+    patch_embed = PatchEmbedding(key=jax.random.PRNGKey(0),patch_size=16, img_size=224, in_channels=3, embed_dim=64)
 
     # Create a random input image tensor
     input_shape = (3, 224, 224)

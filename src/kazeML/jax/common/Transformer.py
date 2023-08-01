@@ -5,12 +5,16 @@ from jaxtyping import Array, PRNGKeyArray
 from typing import Optional, Callable
 from dataclasses import dataclass, field
 
+from kazeML.jax.common.modules.Embedding import EmbedBase, PositionalEmbedding
+
 @dataclass
 class TransformerConfig:
 
     activation: Callable
 
     seed: int = field(default=2019612721831, metadata={"help": "seed for PRNG"})
+
+    max_length: int = field(default=512, metadata={"help": "max length of input sequence"})
 
     embed_dim: int = field(
         default=512, metadata={"help": "embedding dimension"}
@@ -127,19 +131,34 @@ class TransformerEncoder(eqx.Module):
     # Feature TODO: add quantization
     # Feature TODO: add FSDP support
 
-    token_embedding: eqx.nn.Embedding
-    positional_embedding: eqx.nn.Embedding
+    token_embedding: EmbedBase
+    positional_embedding: PositionalEmbedding
     attention_blocks: list
     dropout_block: eqx.nn.Dropout
     feedforward_head: eqx.nn.Sequential
 
     def __init__(self,
-                cfg: TransformerConfig,):
+                cfg: TransformerConfig,
+                embed_tokens: EmbedBase,):
         key = jax.random.PRNGKey(cfg.seed+1029571204)
 
         # Set token embedding
+        self.token_embedding = embed_tokens
+
+        # Set positional embedding
         key, subkey = jax.random.split(key)
-        self.token_embedding = eqx.nn.Embedding(key=subkey, num_embeddings=cfg.vocab_size, embedding_size=cfg.embed_dim)
+        self.positional_embedding = PositionalEmbedding(subkey, cfg.max_length, cfg.embed_dim)
+
+        # Setup attention blocks
+        self.attention_blocks = []
+        for i in range(cfg.layers):
+            key, subkey = jax.random.split(key)
+            self.attention_blocks.append(TransformerEncoderLayer(cfg))
+
+        # Setup dropout block
+        self.dropout_block = eqx.nn.Dropout(p=cfg.dropout)
+
+
     
     def __call__(self, tokens: Array) -> Array:
         return self.forward(tokens)
