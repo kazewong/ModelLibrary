@@ -7,7 +7,8 @@ import jax
 import jax.numpy as jnp
 from jaxtyping import Array, PRNGKeyArray
 
-from kazeML.jax.common.modules.PatchEmbed import PatchEmbed
+from kazeML.jax.common.modules.Embedding import PatchEmbed
+from kazeML.jax.common.VisionTransformer import VIT
 
 @dataclass
 class Data2VecVisionConfig:
@@ -56,8 +57,16 @@ class Data2VecVision(eqx.Module):
         key, subkey = jax.random.split(key)
         self.mask_embedding = jax.random.truncated_normal(key=subkey, lower=-2.0, upper=2.0, shape=(cfg.embed_dim,)) + 0.02
 
-        
+        key, subkey = jax.random.split(key)
+        self.encoder = VIT(key=subkey,
+                            embed_dim=cfg.embed_dim,
+                            hidden_dim=cfg.hidden_dim,
+                            num_heads=cfg.num_heads,
+                            num_channels=cfg.num_channels,
+                            num_layers=cfg.num_layers,)
 
+
+        
         key, subkey = jax.random.split(key)
         self.final_projection = eqx.nn.Linear(key=subkey, in_features=cfg.embed_dim, out_features=cfg.embed_dim)
 
