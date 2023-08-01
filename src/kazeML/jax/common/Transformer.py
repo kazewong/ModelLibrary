@@ -2,18 +2,23 @@ import equinox as eqx
 import jax
 import jax.numpy as jnp
 from jaxtyping import Array, PRNGKeyArray
-from typing import Optional
+from typing import Optional, Callable
 from dataclasses import dataclass, field
 
 @dataclass
 class TransformerConfig:
 
+    activation: Callable
+
+    seed: int = field(default=2019612721831, metadata={"help": "seed for PRNG"})
+
+    embed_dim: int = field(
+        default=512, metadata={"help": "embedding dimension"}
+    )
     embed_path: Optional[str] = field(
         default=None, metadata={"help": "path to pre-trained embedding"}
     )
-    embed_dim: Optional[int] = field(
-        default=512, metadata={"help": "embedding dimension"}
-    )
+
     ffn_embed_dim: int = field(
         default=2048, metadata={"help": "embedding dimension for feed-forward network"}
     )
@@ -21,32 +26,48 @@ class TransformerConfig:
     attention_heads: int = field(
         default=8, metadata={"help": "number of attention heads"}
     )
-    normalize_before: bool = field(
-        default=False, metadata={"help": "apply layernorm before each block"}
+    dropout: float = field(default=0.1, metadata={"help": "Embedding dropout probability"})
+    attention_dropout: float = field(
+        default=0.0, metadata={"help": "dropout probability for attention weights"}
     )
-    learned_pos: bool = field(
-        default=False, metadata={"help": "use learned positional embeddings"}
-    )
-    # args for "Reducing Transformer Depth on Demand with Structured Dropout" (Fan et al., 2019)
-    layerdrop: float = field(default=0, metadata={"help": "LayerDrop probability"})
-    layers_to_keep: Optional[list[int]] = field(
-        default=None, metadata={"help": "which layers to *keep* when pruning"}
-    )
-
-    xformers_att_config: Optional[str] = field(
-        default=None,
+    activation_dropout: float = field(
+        default=0.0,
         metadata={
-            "help": "config for xFormers attention, defined in xformers.components.attention.AttentionConfig"
+            "help": "dropout probability after activation in FFN.",
+            "alias": "--relu-dropout",
         },
-    )
+    ) 
 
-    
+
 class TransformerEncoderLayer(eqx.Module):
 
+    """
+    Transformer Encoder Layer
+    Adopted from https://github.com/facebookresearch/fairseq/blob/main/fairseq/modules/transformer_layer.py
+    """
+
+    activation: Callable
+    attention_layers: list
+    linear_layer1: eqx.nn.Linear
+    linear_layer2: eqx.nn.Linear
+    dropout_layer: eqx.nn.Dropout
+    activation_dropout_layer: eqx.nn.Dropout
+
     # Feature TODO: add quantization
+    # Feature TODO: Output full connected layer
+    # Feature TODO: add full connected layer pruning
 
     def __init__(self, cfg: TransformerConfig):
         super().__init__()
+
+        key = jax.random.PRNGKey(cfg.seed+1)
+        self.activation = cfg.activation
+        key, subkey = jax.random.split(key)
+        self.attention_layers
+
+        key,subkey
+        self.linear_layer1 = eqx.nn.Linear(key=subkey, in_features=cfg.embed_dim, out_features=cfg.ffn_embed_dim)
+        self.linear_layer2 = eqx.nn.Linear(key=subkey, in_features=cfg.ffn_embed_dim, out_features=cfg.embed_dim)
     
     def __call__(self,
                 key: PRNGKeyArray,
