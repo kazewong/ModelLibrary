@@ -163,3 +163,17 @@ class TransformerDecoder(eqx.Module):
     
     def forward(self):
         raise NotImplementedError
+
+def test_transformer_encoder_layer():
+    # Define input and config
+    input_shape = (4, 10, 32)
+    cfg = TransformerConfig(activation=jax.nn.gelu,embed_dim=32, num_heads=4, ffn_embed_dim=64, dropout_rate=0.1, num_layers=2)
+    key = jax.random.PRNGKey(0)
+    x = jax.random.normal(key, input_shape)
+
+    # Initialize model
+    model = TransformerEncoder(cfg)
+
+    # Test forward pass
+    output = model(key, x, None)
+    assert output.shape == input_shape
