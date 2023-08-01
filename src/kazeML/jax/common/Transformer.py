@@ -66,7 +66,7 @@ class TransformerEncoderLayer(eqx.Module):
         super().__init__()
 
         # Set activation
-        key = jax.random.PRNGKey(cfg.seed+1)
+        key = jax.random.PRNGKey(cfg.seed+1201591029)
         self.activation = cfg.activation
         
         # Set attention layers
@@ -121,14 +121,6 @@ class TransformerEncoderLayer(eqx.Module):
         if not self.normalize_before: x = self.final_layernorm(x)
         return x
 
-
-
-
-
-# @dataclass
-# class TransformerEncoderConfig:
-
-
 class TransformerEncoder(eqx.Module):
 
     # Feature TODO: add activation checkpointing
@@ -141,8 +133,13 @@ class TransformerEncoder(eqx.Module):
     dropout_block: eqx.nn.Dropout
     feedforward_head: eqx.nn.Sequential
 
-    def __init__(self):
-        raise NotImplementedError
+    def __init__(self,
+                cfg: TransformerConfig,):
+        key = jax.random.PRNGKey(cfg.seed+1029571204)
+
+        # Set token embedding
+        key, subkey = jax.random.split(key)
+        self.token_embedding = eqx.nn.Embedding(key=subkey, num_embeddings=cfg.vocab_size, embedding_size=cfg.embed_dim)
     
     def __call__(self, tokens: Array) -> Array:
         return self.forward(tokens)
@@ -167,7 +164,7 @@ class TransformerDecoder(eqx.Module):
 def test_transformer_encoder_layer():
     # Define input and config
     input_shape = (4, 10, 32)
-    cfg = TransformerConfig(activation=jax.nn.gelu,embed_dim=32, num_heads=4, ffn_embed_dim=64, dropout_rate=0.1, num_layers=2)
+    cfg = TransformerConfig(activation=jax.nn.gelu, embed_dim = 32, )
     key = jax.random.PRNGKey(0)
     x = jax.random.normal(key, input_shape)
 
