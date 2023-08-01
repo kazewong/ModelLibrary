@@ -2,11 +2,10 @@
 # Inspired by Fairseq's Data2Vec vision Model
 
 import equinox as eqx
-from chex import dataclass
+from dataclasses import dataclass, field
 import jax
 import jax.numpy as jnp
 from jaxtyping import Array, PRNGKeyArray
-from typing import Callable, Union, Optional
 
 from kazeML.jax.common.modules.PatchEmbed import PatchEmbed
 
