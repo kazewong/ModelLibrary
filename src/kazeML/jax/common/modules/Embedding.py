@@ -16,8 +16,30 @@ class EmbedBase(eqx.Module):
             x: Array,) -> Array:
         raise NotImplementedError
 
+class PositionalEmbedding(EmbedBase):
 
-class ClassEmbed(EmbedBase):
+    embedding: Array
+
+    @property
+    def max_len(self) -> int:
+        return self.embedding.shape[0] - 1
+
+    @property
+    def embed_dim(self) -> int:
+        return self.embedding.shape[1]
+
+    def __init__(self,
+                 key: PRNGKeyArray,
+                 max_len: int,
+                 embed_dim: int):
+        super().__init__()
+        self.embeddin = jax.random.normal(key, (1+max_len, embed_dim))
+
+    def embed(self, x: Array) -> Array:
+        raise NotImplementedError
+
+
+class ClassEmbedding(EmbedBase):
 
     """
     Normal embedding based on a bag of vocabulary.
@@ -42,7 +64,7 @@ class ClassEmbed(EmbedBase):
 
     def embed(self, x: Array) -> Array:
         return super().embed(x)
-class PatchEmbed(EmbedBase):
+class PatchEmbedding(EmbedBase):
 
     """
     Patch Embedding module used in Vision Transformer.
