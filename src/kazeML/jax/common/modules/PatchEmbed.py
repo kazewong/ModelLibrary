@@ -30,10 +30,11 @@ class PatchEmbed(eqx.Module):
         return jax.lax.stop_gradient(self._embed_dim)
 
     def __init__(self,
+                 key: PRNGKeyArray,
                  patch_size: int,
                  img_size: int,
                  in_channels: int,
-                 embed_dim: int,):
+                 embed_dim: int):
         super().__init__()
         self._patch_size = patch_size
         self._img_size = img_size
@@ -45,7 +46,7 @@ class PatchEmbed(eqx.Module):
                                     kernel_size=patch_size,
                                     stride=patch_size,
                                     padding=0,
-                                    bias=True)
+                                    key=key)
 
 
     def image_to_patch(self, x: Array, flatten_channels: bool = True) -> Array:
@@ -60,3 +61,20 @@ class PatchEmbed(eqx.Module):
         if flatten_channels:
             x = x.reshape(x.shape[0], -1)
         return x
+    
+
+def test_patch_embed():
+    # Create a PatchEmbed instance
+    patch_embed = PatchEmbed(key=jax.random.PRNGKey(0),patch_size=16, img_size=224, in_channels=3, embed_dim=64)
+
+    # Create a random input image tensor
+    input_shape = (3, 224, 224)
+    x = jnp.ones(input_shape)
+
+    # Test the image_to_patch method
+    patches = patch_embed.image_to_patch(x)
+    assert patches.shape == (64, 196)
+
+    # Test the conv layer output shape
+    conv_output = patch_embed.conv(x)
+    assert conv_output.shape == (64, 14, 14)
