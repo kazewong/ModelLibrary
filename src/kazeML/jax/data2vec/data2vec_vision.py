@@ -6,13 +6,15 @@ from dataclasses import dataclass, field
 import jax
 import jax.numpy as jnp
 from jaxtyping import Array, PRNGKeyArray
+from kazeML.jax.common.Transformer import TransformerConfig, TransformerEncoder
 
-from kazeML.jax.common.modules.Embedding import PatchEmbed
-from kazeML.jax.common.VisionTransformer import VIT
+from kazeML.jax.common.modules.Embedding import PatchEmbedding
+
 
 @dataclass
 class Data2VecVisionConfig:
 
+    transformer_decoder_config: TransformerConfig
     seed: int = 0
 
     layer_scale_init_value: float = 1e-4
@@ -34,7 +36,7 @@ class Data2VecVisionConfig:
 
 class Data2VecVision(eqx.Module):
 
-    patch_embed: PatchEmbed
+    patch_embed: PatchEmbedding
     class_embedding: Array
     mask_embedding: Array
     encoder: eqx.Module
@@ -45,7 +47,7 @@ class Data2VecVision(eqx.Module):
 
         key = jax.random.PRNGKey(cfg.seed)
         key, subkey = jax.random.split(key)
-        self.patch_embed = PatchEmbed(key=subkey,
+        self.patch_embed = PatchEmbedding(key=subkey,
                                       patch_size=cfg.patch_size,
                                       img_size=cfg.image_size,
                                       in_channels=cfg.in_channels,
@@ -58,14 +60,7 @@ class Data2VecVision(eqx.Module):
         self.mask_embedding = jax.random.truncated_normal(key=subkey, lower=-2.0, upper=2.0, shape=(cfg.embed_dim,)) + 0.02
 
         key, subkey = jax.random.split(key)
-        self.encoder = VIT(key=subkey,
-                            embed_dim=cfg.embed_dim,
-                            hidden_dim=cfg.hidden_dim,
-                            num_heads=cfg.num_heads,
-                            num_channels=cfg.num_channels,
-                            num_layers=cfg.num_layers,)
-
-
+        self.encoder = TransformerEncoder(cfg.transformer_decoder_config, self.patch_embed)
         
         key, subkey = jax.random.split(key)
         self.final_projection = eqx.nn.Linear(key=subkey, in_features=cfg.embed_dim, out_features=cfg.embed_dim)

@@ -131,6 +131,7 @@ class TransformerEncoderLayer(eqx.Module):
 
 class TransformerEncoder(eqx.Module):
 
+    # TODO: Make encoder operate on a sequences of embedding, i.e. take embedding out.
     # Feature TODO: add activation checkpointing
     # Feature TODO: add quantization
     # Feature TODO: add FSDP support
