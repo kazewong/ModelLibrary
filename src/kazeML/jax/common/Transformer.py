@@ -48,10 +48,14 @@ class TransformerEncoderLayer(eqx.Module):
 
     activation: Callable
     attention_layers: list
+    attention_layernorm: eqx.nn.LayerNorm
+    activation_dropout_layer: eqx.nn.Dropout
+    dropout_layer: eqx.nn.Dropout
+    final_layernorm: eqx.nn.LayerNorm
     linear_layer1: eqx.nn.Linear
     linear_layer2: eqx.nn.Linear
-    dropout_layer: eqx.nn.Dropout
-    activation_dropout_layer: eqx.nn.Dropout
+
+    normalize_before: bool = False
 
     # Feature TODO: add quantization
     # Feature TODO: Output full connected layer
@@ -60,15 +64,28 @@ class TransformerEncoderLayer(eqx.Module):
     def __init__(self, cfg: TransformerConfig):
         super().__init__()
 
+        # Set activation
         key = jax.random.PRNGKey(cfg.seed+1)
         self.activation = cfg.activation
+        
+        # Set attention layers
         key, subkey = jax.random.split(key)
         self.attention_layers
 
-        key,subkey
+        self.dropout_layer = eqx.nn.Dropout(p=cfg.dropout)
+        self.activation_dropout_layer = eqx.nn.Dropout(p=cfg.activation_dropout)
+
+        # Set full connected layers
+        key, subkey = jax.random.split(key)
         self.linear_layer1 = eqx.nn.Linear(key=subkey, in_features=cfg.embed_dim, out_features=cfg.ffn_embed_dim)
+
+        key, subkey = jax.random.split(key)
         self.linear_layer2 = eqx.nn.Linear(key=subkey, in_features=cfg.ffn_embed_dim, out_features=cfg.embed_dim)
-    
+
+        # Set layernorm
+        self.attention_layernorm = eqx.nn.LayerNorm(shape=cfg.embed_dim)
+        self.final_layernorm = eqx.nn.LayerNorm(shape=cfg.embed_dim)
+
     def __call__(self,
                 key: PRNGKeyArray,
                 x: Array,
@@ -82,7 +99,22 @@ class TransformerEncoderLayer(eqx.Module):
                 encoder_padding_mask: Optional[Array],
                 attention_mask: Optional[Array],
                 ):
-        raise NotImplementedError
+        residual = x
+        if self.normalize_before: x = self.attention_layernorm(x)
+        x = self.attention_layers(key, x, encoder_padding_mask, attention_mask)
+        x = self.dropout_layer(x)
+        x = residual + x
+        if not self.normalize_before: x = self.attention_layernorm(x)
+        x = self.activation(self.linear_layer1(x))
+        x = self.activation_dropout_layer(x)
+        x = self.linear_layer2(x)
+        x = self.dropout_layer(x)
+        x = residual + x
+        if not self.normalize_before: x = self.final_layernorm(x)
+        return x
+
+
+
 
 
 # @dataclass
