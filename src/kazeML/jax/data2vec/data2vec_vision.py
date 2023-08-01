@@ -64,6 +64,9 @@ class Data2VecVision(eqx.Module):
 
         
 
+        key, subkey = jax.random.split(key)
+        self.final_projection = eqx.nn.Linear(key=subkey, in_features=cfg.embed_dim, out_features=cfg.embed_dim)
+
     def make_ema_teacher(self):
         pass
 

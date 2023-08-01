@@ -3,6 +3,11 @@ import jax
 import jax.numpy as jnp
 from jaxtyping import Array, PRNGKeyArray
 from typing import Callable, Union
+from dataclasses import dataclass, field
+
+# @dataclass
+# class TransformerEncoderConfig:
+
 
 class TransformerEncoder(eqx.Module):
 
