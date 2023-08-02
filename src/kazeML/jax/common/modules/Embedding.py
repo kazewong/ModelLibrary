@@ -38,11 +38,11 @@ class PositionalEmbedding(EmbedBase):
                  embed_dim: int,
                  padding_idx: int = 0,):
         super().__init__()
-        self.embeddin = jax.random.normal(key, (1+max_len, embed_dim))
+        self.embedding = jax.random.normal(key, (1+max_len, embed_dim))
         self.padding_idx = padding_idx
 
     def embed(self, x: Array) -> Array:
-        raise NotImplementedError
+        return self.embedding[:x.shape[0]]
 
 
 class ClassEmbedding(EmbedBase):
@@ -70,6 +70,7 @@ class ClassEmbedding(EmbedBase):
 
     def embed(self, x: Array) -> Array:
         return super().embed(x)
+    
 class PatchEmbedding(EmbedBase):
 
     """
@@ -135,9 +136,9 @@ class PatchEmbedding(EmbedBase):
         Returns:
             Array: Image patches of shape (Height*Width/(Patch_Size*Patch_Size), Patch_Size*Patch_Size*Num_Channels)
         """
-        x = self.conv(x)
+        x = self.conv(x).T
         if flatten_channels:
-            x = x.reshape(x.shape[0], -1)
+            x = x.reshape(-1, x.shape[-1])
         return x
     
 

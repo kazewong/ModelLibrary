@@ -15,7 +15,6 @@ from kazeML.jax.common.modules.Embedding import PatchEmbedding
 class Data2VecVisionConfig:
 
     transformer_decoder_config: TransformerConfig
-    seed: int = 0
 
     layer_scale_init_value: float = 1e-4
     num_mask_patches: int = 75
@@ -32,20 +31,18 @@ class Data2VecVisionConfig:
     embed_dim: int = 768
 
 
-
-
 class Data2VecVision(eqx.Module):
 
     patch_embed: PatchEmbedding
     class_embedding: Array
     mask_embedding: Array
-    encoder: eqx.Module
+    encoder: TransformerEncoder
     final_projection: eqx.nn.Linear
 
-    def __init__(self, cfg: Data2VecVisionConfig):
+    def __init__(self, key: PRNGKeyArray,
+                cfg: Data2VecVisionConfig):
         super().__init__()
 
-        key = jax.random.PRNGKey(cfg.seed)
         key, subkey = jax.random.split(key)
         self.patch_embed = PatchEmbedding(key=subkey,
                                       patch_size=cfg.patch_size,
@@ -60,7 +57,7 @@ class Data2VecVision(eqx.Module):
         self.mask_embedding = jax.random.truncated_normal(key=subkey, lower=-2.0, upper=2.0, shape=(cfg.embed_dim,)) + 0.02
 
         key, subkey = jax.random.split(key)
-        self.encoder = TransformerEncoder(cfg.transformer_decoder_config, self.patch_embed)
+        self.encoder = TransformerEncoder(subkey, cfg.transformer_decoder_config, self.patch_embed)
         
         key, subkey = jax.random.split(key)
         self.final_projection = eqx.nn.Linear(key=subkey, in_features=cfg.embed_dim, out_features=cfg.embed_dim)
@@ -69,7 +66,8 @@ class Data2VecVision(eqx.Module):
         pass
 
     def forward(self,
+                key: PRNGKeyArray,
                 img: Array,
-                mask: bool = True) -> Array:
-        x = self.patch_embed(img)
-        raise NotImplementedError
+                mask: Array | None = None) -> Array:
+        x = self.encoder(key, img, mask)
+        return x 

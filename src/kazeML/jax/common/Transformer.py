@@ -12,8 +12,6 @@ class TransformerConfig:
 
     activation: Callable
 
-    seed: int = field(default=2019612721831, metadata={"help": "seed for PRNG"})
-
     max_length: int = field(default=512, metadata={"help": "max length of input sequence"})
 
     embed_dim: int = field(
@@ -70,11 +68,11 @@ class TransformerEncoderLayer(eqx.Module):
     # Feature TODO: add full connected layer pruning
     # Feature TODO: Give support to attention masking
 
-    def __init__(self, cfg: TransformerConfig):
+    def __init__(self, key: PRNGKeyArray, 
+                cfg: TransformerConfig):
         super().__init__()
 
         # Set activation
-        key = jax.random.PRNGKey(cfg.seed+1201591029)
         self.activation = cfg.activation
         
         # Set attention layers
@@ -104,7 +102,7 @@ class TransformerEncoderLayer(eqx.Module):
                 encoder_padding_mask: Optional[Array],
                 # attention_mask: Optional[Array],
                 ):
-        self.forward(key, x, encoder_padding_mask)#, attention_mask)
+        return self.forward(key, x, encoder_padding_mask)#, attention_mask)
     
     def forward(self,
                 key: PRNGKeyArray,
@@ -115,16 +113,20 @@ class TransformerEncoderLayer(eqx.Module):
 
         residual = x
         if self.normalize_before: x = self.attention_layernorm(x)
-        x = self.attention_layers(x, x, x, encoder_padding_mask, key=key)
-        x = self.dropout_layer(x)
+        key, subkey = jax.random.split(key)
+        x = self.attention_layers(x, x, x, encoder_padding_mask, key=subkey)
+        key, subkey = jax.random.split(subkey)
+        x = self.dropout_layer(x, key=subkey)
         x = residual + x
         if not self.normalize_before: x = self.attention_layernorm(x)
 
-        x = self.activation(self.linear_layer1(x))
-        x = self.activation_dropout_layer(x)
+        x = self.activation(jax.vmap(self.linear_layer1)(x))
+        key, subkey = jax.random.split(subkey)
+        x = self.activation_dropout_layer(x, key=subkey)
 
-        x = self.linear_layer2(x)
-        x = self.dropout_layer(x)
+        x = jax.vmap(self.linear_layer2)(x)
+        key, subkey = jax.random.split(subkey)
+        x = self.dropout_layer(x, key=subkey)
         x = residual + x
         if not self.normalize_before: x = self.final_layernorm(x)
         return x
@@ -145,9 +147,9 @@ class TransformerEncoder(eqx.Module):
     layer_norm: eqx.nn.LayerNorm
 
     def __init__(self,
+                key: PRNGKeyArray,
                 cfg: TransformerConfig,
                 embed_tokens: EmbedBase,):
-        key = jax.random.PRNGKey(cfg.seed+1029571204)
 
         # Set token embedding
         self.token_embedding = embed_tokens
@@ -158,12 +160,13 @@ class TransformerEncoder(eqx.Module):
 
         # Set embedding layer norm
         if cfg.layernorm_embedding: self.embedding_layer_norm = eqx.nn.LayerNorm(shape=cfg.embed_dim)
+        else: self.embedding_layer_norm = None
 
         # Setup attention blocks
         self.attention_blocks = []
         for i in range(cfg.layers):
             key, subkey = jax.random.split(key)
-            self.attention_blocks.append(TransformerEncoderLayer(cfg))
+            self.attention_blocks.append(TransformerEncoderLayer(subkey,cfg))
 
         # Setup dropout block
         self.dropout_block = eqx.nn.Dropout(p=cfg.dropout)
@@ -177,9 +180,10 @@ class TransformerEncoder(eqx.Module):
                 mask: Optional[Array] = None,) -> Array:
         return self.forward(key, tokens, mask)
     
-    def embed(self, tokens: Array) -> Array:
-        embedding = self.token_embedding(tokens) + self.positional_embedding(tokens)
-        embedding = self.dropout_block(embedding)
+    def embed(self, key: PRNGKeyArray, tokens: Array) -> Array:
+        embedding = self.token_embedding(tokens)
+        embedding += self.positional_embedding(embedding)
+        embedding = self.dropout_block(embedding, key=key)
         if self.embedding_layer_norm is not None: embedding = self.embedding_layer_norm(embedding)
         return embedding
     
@@ -188,7 +192,8 @@ class TransformerEncoder(eqx.Module):
                 tokens: Array,
                 mask: Optional[Array] = None,
                 ) -> Array:
-        x = self.embed(tokens)
+        key, subkey = jax.random.split(key)
+        x = self.embed(subkey, tokens)
         for block in self.attention_blocks:
             key, subkey = jax.random.split(key)
             x = block(subkey, x, mask) # TODO: Need to figure how to better mask
