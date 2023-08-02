@@ -33,7 +33,6 @@ class Data2VecVisionConfig:
 
 class Data2VecVision(eqx.Module):
 
-    patch_embed: PatchEmbedding
     class_embedding: Array
     mask_embedding: Array
     encoder: TransformerEncoder
@@ -44,7 +43,7 @@ class Data2VecVision(eqx.Module):
         super().__init__()
 
         key, subkey = jax.random.split(key)
-        self.patch_embed = PatchEmbedding(key=subkey,
+        patch_embed = PatchEmbedding(key=subkey,
                                       patch_size=cfg.patch_size,
                                       img_size=cfg.image_size,
                                       in_channels=cfg.in_channels,
@@ -57,7 +56,7 @@ class Data2VecVision(eqx.Module):
         self.mask_embedding = jax.random.truncated_normal(key=subkey, lower=-2.0, upper=2.0, shape=(cfg.embed_dim,)) + 0.02
 
         key, subkey = jax.random.split(key)
-        self.encoder = TransformerEncoder(subkey, cfg.transformer_decoder_config, self.patch_embed)
+        self.encoder = TransformerEncoder(subkey, cfg.transformer_decoder_config, patch_embed)
         
         key, subkey = jax.random.split(key)
         self.final_projection = eqx.nn.Linear(key=subkey, in_features=cfg.embed_dim, out_features=cfg.embed_dim)
