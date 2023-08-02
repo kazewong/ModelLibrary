@@ -71,8 +71,8 @@ class Data2VecVision(eqx.Module):
         self.top_k_layer = cfg.top_k_layer
 
     def loss(self,
-                key: PRNGKeyArray,
-                img: Array) -> Array:
+            img: Array,
+            key: PRNGKeyArray,) -> Array:
 
         # Create embedding and masks
         key, subkey = jax.random.split(key)
@@ -101,11 +101,11 @@ class Data2VecVision(eqx.Module):
 
         key, subkey = jax.random.split(key)
         x = self.encoder.forward(subkey, mask_x, None, layer_result=False)
-        return x,y
+        return jnp.mean((x-y)**2)
 
     def encode(self,
-               key: PRNGKeyArray,
-               img: Array) -> Array:
+               img: Array,
+               key: PRNGKeyArray,) -> Array:
         x = self.encoder(key, img, None)
         x = self.final_projection(x)
         return x
