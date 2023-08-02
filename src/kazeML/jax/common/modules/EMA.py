@@ -10,7 +10,7 @@ def replace(model, update):
     else:
         return update
 
-class EMA(eqx.Module):
+class EMAModule(eqx.Module):
     """
     Exponential Moving Average tracking of a model's parameters.
     """
@@ -28,13 +28,14 @@ class EMA(eqx.Module):
         self.log_norms = log_norms
 
     def __call__(self, new_model: eqx.Module) -> eqx.Module:
-        return self.step(new_model)        
+        return self.step(new_model)
 
     def set_decay(self, decay: float) -> eqx.Module:
         return eqx.tree_at(lambda x: x.decay, self, decay)
 
     def set_model(self, pyTree: PyTree) -> eqx.Module:
-        return eqx.tree_at(lambda x: jax.tree_util.tree_leaves(x), self.model, pyTree)
+        new_tree = jax.tree_util.tree_map(replace, jax.tree_util.tree_leaves(self.model), pyTree)
+        return eqx.tree_at(lambda x: jax.tree_util.tree_leaves(x), self.model, new_tree)
 
     def step(self, new_model: eqx.Module) -> eqx.Module:
         decay = self.decay

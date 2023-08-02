@@ -189,17 +189,27 @@ class TransformerEncoder(eqx.Module):
     
     def forward(self,
                 key: PRNGKeyArray,
-                tokens: Array,
+                embedding: Array,
                 mask: Optional[Array] = None,
-                ) -> Array:
+                layer_result: bool = False,
+                ) -> Array | list:
         key, subkey = jax.random.split(key)
-        x = self.embed(subkey, tokens)
-        for block in self.attention_blocks:
-            key, subkey = jax.random.split(key)
-            x = block(subkey, x, mask) # TODO: Need to figure how to better mask
+        x = embedding
+        if layer_result: 
+            layer_results = []
+            for block in self.attention_blocks:
+                key, subkey = jax.random.split(key)
+                x = block(subkey, x, mask)
+                layer_results.append(x)
+            return layer_results
 
-        x = self.layer_norm(x)
-        return x
+        else:
+            for block in self.attention_blocks:
+                key, subkey = jax.random.split(key)
+                x = block(subkey, x, mask) # TODO: Need to figure how to better mask
+
+            x = self.layer_norm(x)
+            return x
 
 class TransformerDecoder(eqx.Module):
 

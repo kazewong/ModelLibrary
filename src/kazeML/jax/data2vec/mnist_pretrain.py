@@ -8,12 +8,11 @@ import jax
 
 from kazeML.jax.common.Transformer import TransformerConfig
 from kazeML.jax.data2vec.data2vec_vision import Data2VecVision, Data2VecVisionConfig
-from kazeML.jax.common.modules.EMA import EMA
+from kazeML.jax.common.modules.EMA import EMAModule
 
 transformer_config = TransformerConfig(eqx.nn.Lambda(jax.nn.gelu), embed_dim=64)
 D2V_cfg = Data2VecVisionConfig(transformer_config, image_size=28, patch_size=4, in_channels=1,
-                               embed_dim=64, num_mask_patches=10, min_mask_patches_per_block=1,
-                               max_mask_patches_per_block=10)
+                               embed_dim=64)
 
 LEARNING_RATE = 1e-4
 
@@ -41,7 +40,6 @@ test_dataset = torchvision.datasets.MNIST(
 )
 
 model.forward(jax.random.PRNGKey(0),jnp.array(train_dataset[0][0]))
-ema = EMA(model, decay=0.9999)
 # trainloader = torch.utils.data.DataLoader(
 #     train_dataset, batch_size=BATCH_SIZE, shuffle=True, num_workers=NUM_WORKERS
 # )
