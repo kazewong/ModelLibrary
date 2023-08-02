@@ -27,11 +27,8 @@ class EMA(eqx.Module):
         self.decay = decay
         self.log_norms = log_norms
 
-    def __call__(self, x: Array, y: Array) -> Array:
-        """
-        Update the moving average of x with y.
-        """
-        return self.decay * x + (1 - self.decay) * y
+    def __call__(self, new_model: eqx.Module) -> eqx.Module:
+        return self.step(new_model)        
 
     def set_decay(self, decay: float) -> eqx.Module:
         return eqx.tree_at(lambda x: x.decay, self, decay)
@@ -39,7 +36,7 @@ class EMA(eqx.Module):
     def set_model(self, pyTree: PyTree) -> eqx.Module:
         return eqx.tree_at(lambda x: jax.tree_util.tree_leaves(x), self.model, pyTree)
 
-    def step(self, new_model: eqx.Module):
+    def step(self, new_model: eqx.Module) -> eqx.Module:
         decay = self.decay
         lr = 1 - decay
         ema_params = eqx.filter(jax.tree_util.tree_leaves(self.model), eqx.is_array)
