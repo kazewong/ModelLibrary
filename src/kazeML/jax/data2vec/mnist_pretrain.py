@@ -39,7 +39,7 @@ test_dataset = torchvision.datasets.MNIST(
     transform=normalise_data,
 )
 
-model.loss(jax.random.PRNGKey(0),jnp.array(train_dataset[0][0]))
+model.forward_pair(jax.random.PRNGKey(0),jnp.array(train_dataset[0][0]))
 # trainloader = torch.utils.data.DataLoader(
 #     train_dataset, batch_size=BATCH_SIZE, shuffle=True, num_workers=NUM_WORKERS
 # )
