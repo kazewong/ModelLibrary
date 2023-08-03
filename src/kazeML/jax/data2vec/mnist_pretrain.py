@@ -205,5 +205,5 @@ def train(
             
     return best_model, opt_state
 
-model, opt_state= train(model, trainloader, testloader, jax.random.PRNGKey(0), steps=20, print_every=4)
+model, opt_state= train(model, trainloader, testloader, jax.random.PRNGKey(0), steps=1000, print_every=4)
 model.save_model("best_model")
