@@ -26,7 +26,7 @@ LEARNING_RATE = 1e-4
 STEPS = 200
 PRINT_EVERY = 4
 SEED = 5678
-NUM_WORKERS = 4
+NUM_WORKERS = 8
 TIME_FEATURE = 128
 AUTOENCODER_EMBED_DIM = 256
 
@@ -203,3 +203,5 @@ def train(
                 
             
     return best_model, opt_state
+
+train(model, trainloader, testloader, jax.random.PRNGKey(0), steps=1000, print_every=100)
