@@ -8,8 +8,8 @@ import jax.numpy as jnp
 from jaxtyping import Array, PRNGKeyArray
 from kazeML.jax.common.Transformer import TransformerConfig, TransformerEncoder
 from kazeML.jax.common.modules.EMA import EMAModule
-
 from kazeML.jax.common.modules.Embedding import PatchEmbedding
+import copy
 
 
 @dataclass
@@ -62,7 +62,7 @@ class Data2VecVision(eqx.Module):
 
         key, subkey = jax.random.split(key)
         self.encoder = TransformerEncoder(subkey, cfg.transformer_decoder_config, patch_embed)
-        self.ema = EMAModule(self.encoder, cfg.ema_decay)
+        self.ema = EMAModule(copy.deepcopy(self.encoder), cfg.ema_decay)
 
         key, subkey = jax.random.split(key)
         self.final_projection = eqx.nn.Linear(key=subkey, in_features=cfg.embed_dim, out_features=cfg.embed_dim)
@@ -106,6 +106,12 @@ class Data2VecVision(eqx.Module):
     def encode(self,
                key: PRNGKeyArray,
                img: Array) -> Array:
-        x = self.encoder(key, img, None)
-        x = self.final_projection(x)
+        emb = self.encoder.embed(img)
+        x = self.encoder(key, emb, None)
         return x
+
+    def save_model(self, path: str):
+        eqx.tree_serialise_leaves(path+".eqx", self)
+
+    def load_model(self, path: str) -> None:
+        return eqx.tree_deserialise_leaves(path+".eqx", self)

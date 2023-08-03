@@ -26,7 +26,7 @@ LEARNING_RATE = 1e-4
 STEPS = 200
 PRINT_EVERY = 4
 SEED = 5678
-NUM_WORKERS = 8
+NUM_WORKERS = 12
 TIME_FEATURE = 128
 AUTOENCODER_EMBED_DIM = 256
 
@@ -102,14 +102,14 @@ def train(
     trainloader: DataLoader,
     testloader: DataLoader,
     key: PRNGKeyArray,
-    steps: int = 1000,
+    steps: int = 50,
     print_every: int = 100,
 ):
 
     opt_state = optimizer.init(eqx.filter(model, eqx.is_array))
 
     def single_device_loss(model, batch, key):
-        result = model.forward_pair(key, batch)
+        result = jax.vmap(model.forward_pair)(key, batch)
         return jnp.mean((result[0]-result[1])**2)
 
     @eqx.filter_jit
@@ -124,6 +124,7 @@ def train(
         loss_values, grads = eqx.filter_value_and_grad(single_device_loss)(model, batch, keys)
         updates, opt_state = opt_update(grads, opt_state, model)
         model = eqx.apply_updates(model, updates)
+        model = eqx.tree_at(lambda x: x.ema.model, model, model.ema.step(model.encoder))
         return model, opt_state, loss_values
 
     def train_epoch(
@@ -204,4 +205,5 @@ def train(
             
     return best_model, opt_state
 
-train(model, trainloader, testloader, jax.random.PRNGKey(0), steps=1000, print_every=100)
+model, opt_state= train(model, trainloader, testloader, jax.random.PRNGKey(0), steps=20, print_every=4)
+model.save_model("best_model")
