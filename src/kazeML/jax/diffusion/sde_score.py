@@ -175,6 +175,7 @@ class ScordBasedSDE(eqx.Module):
         time_steps = jnp.linspace(self.sde.T, eps, n_steps)
         step_size = time_steps[0] - time_steps[1]
         x = x_init
+        x_mean = x_init
 
         for time_step in tqdm(time_steps):
             key, subkey = jax.random.split(key)
@@ -196,6 +197,7 @@ class ScordBasedSDE(eqx.Module):
         time_steps = jnp.linspace(self.sde.T, eps, n_steps)
         step_size = time_steps[0] - time_steps[1]
         x = x_init
+        x_mean = x_init
 
         for time_step in tqdm(time_steps):
             key, subkey = jax.random.split(key)
