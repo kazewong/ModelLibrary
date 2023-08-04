@@ -3,3 +3,4 @@ mlruns/*
 *.pyc
 build/*
 *.egg-info
+*.eqx

@@ -14,7 +14,8 @@ import numpy as np
 
 from kazeML.jax.common.Transformer import TransformerConfig
 from kazeML.jax.data2vec.data2vec_vision import Data2VecVision, Data2VecVisionConfig
-from kazeML.jax.common.modules.EMA import EMAModule
+from clearml import Task, Logger
+
 
 transformer_config = TransformerConfig(eqx.nn.Lambda(jax.nn.gelu), embed_dim=64)
 D2V_cfg = Data2VecVisionConfig(transformer_config, image_size=28, patch_size=4, in_channels=1,
@@ -22,7 +23,7 @@ D2V_cfg = Data2VecVisionConfig(transformer_config, image_size=28, patch_size=4, 
 
 
 BATCH_SIZE = 256
-LEARNING_RATE = 1e-4
+LEARNING_RATE = 1e-3
 STEPS = 200
 PRINT_EVERY = 4
 SEED = 5678
@@ -34,6 +35,8 @@ AUTOENCODER_EMBED_DIM = 256
 initialize()
 
 if jax.process_index() == 0:
+    Task.init(project_name="DiffusionAstro", task_name="Data2VecMnist")
+
     print(jax.process_count())
     print(jax.devices())
     print(jax.local_device_count())
@@ -199,11 +202,13 @@ def train(
             if max_loss > test_loss:
                 max_loss = test_loss
                 best_model = model
+                model.save_model("best_model")
             if jax.process_index() == 0:
                 print(f"Step: {step}, Train Loss: {train_loss}, Test Loss: {test_loss}")
+                Logger.current_logger().report_scalar("Loss", "training_loss", value=train_loss, iteration=step)
+                Logger.current_logger().report_scalar("Loss", "test_loss", value=test_loss, iteration=step)
                 
             
     return best_model, opt_state
 
-model, opt_state= train(model, trainloader, testloader, jax.random.PRNGKey(0), steps=1000, print_every=4)
-model.save_model("best_model")
+model, opt_state= train(model, trainloader, testloader, jax.random.PRNGKey(0), steps=10000, print_every=4)
