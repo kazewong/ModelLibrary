@@ -87,7 +87,7 @@ class Corrector(ABC):
 
 class LangevinCorrector(Corrector):
 
-    def __call__(self, key: PRNGKeyArray, x: Array, t: Array, step_size: float, conditional: Array | None = None) -> tuple[Array, Array]:
+    def __call__(self, key: PRNGKeyArray, x: Array, t: Array, step_size: float) -> tuple[Array, Array]:
         x_mean = x
         for i in range(self.n_steps):
             grad = self.score(x, t.reshape(1))
@@ -158,10 +158,9 @@ class ScordBasedSDE(eqx.Module):
         loss = self.weight_function(random_t)* jnp.sum((score*std+z) ** 2)
         return loss
 
-    def score(self, x: Array, t: Array, conditional: Array | None = None) -> Array:
+    def score(self, x: Array, t: Array) -> Array:
         mean, std = self.sde.marginal_prob(x, t)
         feature = self.time_embed(self.time_feature(x=t))
-        if conditional is not None: feature += conditional
         score = self.autoencoder(x, feature)/std
         return score
 
@@ -223,12 +222,26 @@ class ScordBasedSDE(eqx.Module):
 
     def conditional_sample(self,
                             key: PRNGKeyArray,
+                            conditional_function: Callable,
+                            condtional_data: Array,
                             data_shape: tuple[int],
-                            conditional: Array,
                             n_steps:int,
                             eps: float = 1e-3,):
-        self.predictor.score = self.score
-        self.corrector.score = self.score
+        """
+        Conditional sampling
+
+        Args:
+            key (PRNGKeyArray): JAX random key
+            conditional_function (Callable): Function that takes in x, t, y and returns a score
+            condtional_data (Array): Conditional data y
+            data_shape (tuple[int]): Shape of the data
+            n_steps (int): Number of steps
+            eps (float, optional): Epsilon. Defaults to 1e-3.
+        """
+
+        conditional_function = eqx.Partial(conditional_function, y=condtional_data)
+        self.predictor.score = lambda x, t: self.score(x,t) + conditional_function(x, t)
+        self.corrector.score = lambda x, t: self.score(x,t) + conditional_function(x, t)
         key, subkey = jax.random.split(key)
         x_init = self.sde.sample_prior(subkey, data_shape)
         time_steps = jnp.linspace(self.sde.T, eps, n_steps)
