@@ -17,6 +17,8 @@ from kazeML.jax.diffusion.sde_score import ScordBasedSDE, GaussianFourierFeature
 from kazeML.jax.diffusion.diffusion_dataset import DiffusionDataset
 import numpy as np
 
+
+
 class SDEDiffusionExperimentParser(Tap):
     # Metadata about the experiment
     mode: Literal["train", "predict"] = "train"
@@ -35,15 +37,12 @@ class SDEDiffusionExperimentParser(Tap):
     num_workers: int = 8
     train_test_ratio: float = 0.8
 
-    def configure(self) -> None:
-        model_parser = SDEDiffusionModelParser()
-        for key, value in model_parser.as_dict():
-            self.add_argument(f"--{key}", type=type(value), default=value)
-
+class BigParser(SDEDiffusionExperimentParser, SDEDiffusionModelParser):
+    pass
 class SDEDiffusionTrainer:
 
     def __init__(self,
-                config: Union[SDEDiffusionExperimentParser, SDEDiffusionModelParser], logging: bool = False):
+                config: BigParser, logging: bool = False):
         self.config = config
         self.logging = logging
         if logging and (jax.process_index() == 0):
@@ -171,9 +170,7 @@ class SDEDiffusionTrainer:
 
 if __name__ == "__main__":
 
-    exp_args = SDEDiffusionExperimentParser(add_help=False)
-    model_args = SDEDiffusionModelParser(add_help=False)
-    args = Tap(parents=[exp_args, model_args]).parse_args()
+    args = BigParser().parse_args()
     # if args.distributed == True:
     #     initialize()
     #     print(jax.process_count())
