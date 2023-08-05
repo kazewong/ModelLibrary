@@ -6,6 +6,17 @@ from typing import Callable
 from kazeML.jax.diffusion.sde import SDE
 from abc import ABC, abstractmethod
 from tqdm import tqdm
+from tap import Tap
+
+class SDEDiffusionModelParser(Tap):
+
+    SDE: str = "VESDE"
+
+    # Model hyperparameters
+    time_feature: int = 128
+    autoencoder_embed_dim: int = 256
+    hidden_layer: list[int] = [3,16,32,64,128]
+    group_norm_size: int = 32
 
 class GaussianFourierFeatures(eqx.Module):
 

@@ -12,21 +12,18 @@ from torch.utils.data.distributed import DistributedSampler
 from clearml import Task, Logger
 from kazeML.jax.common.Unet import Unet
 from kazeML.jax.diffusion.sde import VESDE
-from kazeML.jax.diffusion.sde_score import ScordBasedSDE, GaussianFourierFeatures, LangevinCorrector
+from kazeML.jax.diffusion.sde_score import ScordBasedSDE, GaussianFourierFeatures, LangevinCorrector, SDEDiffusionModelParser
+from kazeML.jax.diffusion.diffusion_dataset import DiffusionDataset
 import numpy as np
 
-class SDEDiffusionParser(Tap):
+class SDEDiffusionExperimentParser(Tap):
     # Metadata about the experiment
     data_path: str
     experiment_name: str
     project_name: str = "DiffusionAstro"
     distributed: bool = False
+    conditional: bool = False
 
-    # Model hyperparameters
-    time_feature: int = 128
-    autoencoder_embed_dim: int = 256
-    hidden_layer: list[int] = [3,16,32,64,128]
-    group_norm_size: int = 32
 
     # Training hyperparameters
     n_epochs: int = 500
@@ -35,13 +32,15 @@ class SDEDiffusionParser(Tap):
     log_epoch: int = 2
     seed: int = 2019612721831
     num_workers: int = 8
+    train_test_ratio: float = 0.8
 
-
+    def configure(self) -> None:
+        self.add_subparser("SDEDiffusionModelParser", SDEDiffusionModelParser, help="Model hyperparameters")
 
 class SDEDiffusionTrainer:
 
     def __init__(self,
-                config: SDEDiffusionParser, logging: bool = False):
+                config: SDEDiffusionExperimentParser, logging: bool = False):
         self.config = config
         self.logging = logging
         if logging and (jax.process_index() == 0):
@@ -51,7 +50,7 @@ class SDEDiffusionTrainer:
         self.global_mesh = jax.sharding.Mesh(devices, ('b'))
         self.sharding = jax.sharding.NamedSharding(self.global_mesh, jax.sharding.PartitionSpec(('b'),))
 
-        train_set, test_set = #Fill here 
+        train_set, test_set = random_split(DiffusionDataset(self.config.data_path), [config.train_test_ratio, 1 - config.train_test_ratio])
         train_sampler = DistributedSampler(train_set,
                                            num_replicas=n_processes,
                                            rank=jax.process_index(),
@@ -191,7 +190,7 @@ class SDEDiffusionTrainer:
 
 if __name__ == "__main__":
 
-    args = SDEDiffusionParser().parse_args()
+    args = SDEDiffusionExperimentParser().parse_args()
 
     if args.distributed == True:
         initialize()
