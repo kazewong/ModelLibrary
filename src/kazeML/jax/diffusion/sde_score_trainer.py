@@ -1,3 +1,4 @@
+from typing import Literal
 from tap import Tap
 from jaxtyping import PyTree, Float, Array, PRNGKeyArray
 import jax
@@ -18,6 +19,7 @@ import numpy as np
 
 class SDEDiffusionExperimentParser(Tap):
     # Metadata about the experiment
+    mode: Literal["train", "predict"] = "train"
     data_path: str
     experiment_name: str
     project_name: str = "DiffusionAstro"
@@ -100,21 +102,21 @@ class SDEDiffusionTrainer:
             if jax.process_index()==0: print("Epoch: ", step)
             if step % self.config.log_epoch == 0:
                 self.key, subkey = jax.random.split(self.key)
-                self.model, self.opt_state, train_loss = self.train_epoch(self.model, self.opt_state, self.train_loader, subkey, step, log_loss=True)
+                self.model, self.opt_state, train_loss = self.run_epoch(self.model, self.opt_state, self.train_loader, subkey, step, log_loss=True, train=True)
                 self.key, subkey = jax.random.split(self.key)
-                test_loss = self.test_epoch(self.model, self.test_loader, subkey, step)
+                _, _, test_loss = self.run_epoch(self.model, self.opt_state, self.test_loader, subkey, step, log_loss=True, train=False)
 
                 if max_loss > test_loss:
                     max_loss = test_loss
                     self.best_model = self.model
                 if self.logging:
-                    Logger.current_logger().report_scalar("Loss", "training_loss", value=train_loss, iteration=step)
-                    Logger.current_logger().report_scalar("Loss", "test_loss", value=test_loss, iteration=step)
+                    Logger.current_logger().report_scalar("Loss", "training_loss", value=train_loss, iteration=step) # type: ignore
+                    Logger.current_logger().report_scalar("Loss", "test_loss", value=test_loss, iteration=step) # type: ignore
                     self.best_model.save_model("./best_model")
                     Task.current_task().upload_artifact(artifact_object="./best_model", name="model")
             else:
                 self.key, subkey = jax.random.split(self.key)
-                self.model, self.opt_state, train_loss = self.train_epoch(self.model, self.opt_state, self.train_loader, subkey, step, log_loss=False)
+                self.model, self.opt_state, train_loss = self.run_epoch(self.model, self.opt_state, self.train_loader, subkey, step, log_loss=False, train=True)
 
 
     def validate(self):
@@ -122,71 +124,48 @@ class SDEDiffusionTrainer:
 
     @staticmethod
     @eqx.filter_jit
-    def train_step(
+    def run_step(
         model: ScordBasedSDE,
         opt_state: PyTree,
         batch: Float[Array, "batch 1 datashape"],
         key: PRNGKeyArray,
-        opt_update
+        opt_update,
+        train: bool = True,
     ):
         keys = jax.random.split(key, batch.shape[0])
         single_device_loss = lambda model, batch, key: jnp.mean(jax.vmap(model.loss)(batch, key))
-        loss_values, grads = eqx.filter_value_and_grad(single_device_loss)(model, batch, keys)
-        updates, opt_state = opt_update(grads, opt_state, model)
-        model = eqx.apply_updates(model, updates)
-        return model, opt_state, loss_values
+        if train:
+            loss_values, grads = eqx.filter_value_and_grad(single_device_loss)(model, batch, keys)
+            updates, opt_state = opt_update(grads, opt_state, model)
+            model = eqx.apply_updates(model, updates)
+            return model, opt_state, loss_values
+        else:
+            loss_values = single_device_loss(model, batch, keys)
+            return model, opt_state, loss_values
 
-    @staticmethod
-    @eqx.filter_jit
-    def test_step(
-        model: ScordBasedSDE,
-        batch: Float[Array, "batch 1 datashape"],
-        key: PRNGKeyArray,
-    ):
-        keys = jax.random.split(key, batch.shape[0])
-        loss_values = jnp.mean(jax.vmap(model.loss)(batch, keys))
-        return loss_values
-
-    def train_epoch(self,
+    def run_epoch(self,
         model: ScordBasedSDE,
         opt_state: PyTree,
-        trainloader: DataLoader,
+        data_loader: DataLoader,
         key: PRNGKeyArray,
         epoch: int,
         log_loss: bool = False,
+        train: bool = True,
     ) -> tuple[ScordBasedSDE, PyTree, Array | float]:
-        self.train_loader.sampler.set_epoch(epoch)
-        train_loss = 0
-        for batch in trainloader:
+        data_loader.sampler.set_epoch(epoch)
+        loss = 0
+        for batch in data_loader:
             key, subkey = jax.random.split(key)
             local_batch = jnp.array(batch)
             global_shape = (jax.process_count() * local_batch.shape[0], ) + self.data_shape
 
             arrays = jax.device_put(jnp.split(local_batch, len(self.global_mesh.local_devices), axis = 0), self.global_mesh.local_devices)
             global_batch = jax.make_array_from_single_device_arrays(global_shape, self.sharding, arrays)
-            model, opt_state, loss_values = self.train_step(model, opt_state, global_batch, subkey, self.optimizer.update)
-            if log_loss: train_loss += jnp.sum(process_allgather(loss_values))
-        train_loss = train_loss/ jax.process_count() / len(trainloader) /np.sum(self.data_shape)
-        return model, opt_state, train_loss
-
-    def test_epoch(self,
-        model: ScordBasedSDE,
-        testloader: DataLoader,
-        key: PRNGKeyArray,
-        epoch: int,
-    ):
-        test_loss = 0
-        self.test_loader.sampler.set_epoch(epoch)
-        for batch in testloader:
-            key, subkey = jax.random.split(key)
-            local_batch = jnp.array(batch)
-            global_shape = (jax.process_count() * local_batch.shape[0], ) + self.data_shape
-
-            arrays = jax.device_put(jnp.split(local_batch, len(self.global_mesh.local_devices), axis = 0), self.global_mesh.local_devices)
-            global_batch = jax.make_array_from_single_device_arrays(global_shape, self.sharding, arrays)
-            test_loss += jnp.sum(process_allgather(self.test_step(model, global_batch, subkey)))
-        test_loss_values = test_loss/ jax.process_count() / len(testloader) /np.sum(self.data_shape)
-        return test_loss_values
+            model, opt_state, loss_values = self.run_step(model, opt_state, global_batch, subkey, self.optimizer.update, train=train)
+            if log_loss: loss += jnp.sum(process_allgather(loss_values))
+        loss = loss/ jax.process_count() / len(data_loader) /np.sum(self.data_shape)
+        return model, opt_state, loss
+            
 
 if __name__ == "__main__":
 
