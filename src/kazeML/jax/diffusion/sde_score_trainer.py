@@ -1,4 +1,4 @@
-from typing import Literal, Type, Union
+from typing import Literal
 from tap import Tap
 from jaxtyping import PyTree, Float, Array, PRNGKeyArray
 import jax
@@ -13,7 +13,7 @@ from torch.utils.data.distributed import DistributedSampler
 from clearml import Task, Logger
 from kazeML.jax.common.Unet import Unet
 from kazeML.jax.diffusion.sde import VESDE
-from kazeML.jax.diffusion.sde_score import ScordBasedSDE, GaussianFourierFeatures, LangevinCorrector, SDEDiffusionModelParser
+from kazeML.jax.diffusion.sde_score import ScordBasedSDE, GaussianFourierFeatures, LangevinCorrector
 from kazeML.jax.diffusion.diffusion_dataset import DiffusionDataset
 import numpy as np
 
@@ -54,7 +54,6 @@ class SDEDiffusionModelParser(Tap):
     group_norm_size: int = 32
 
     # Predictor hyperparameters
-
 
 class BigParser(SDEDiffusionExperimentParser, SDEDiffusionModelParser):
     pass
@@ -185,19 +184,21 @@ class SDEDiffusionTrainer:
             if log_loss: loss += jnp.sum(process_allgather(loss_values))
         loss = loss/ jax.process_count() / len(data_loader) /np.sum(self.data_shape)
         return model, opt_state, loss
+
+
             
 
 if __name__ == "__main__":
 
     args = BigParser().parse_args()
-    # if args.distributed == True:
-    #     initialize()
-    #     print(jax.process_count())
+    if args.distributed == True:
+        initialize()
+        print(jax.process_count())
 
-    # n_processes = jax.process_count()
-    # if jax.process_index() == 0:
-    #     trainer = SDEDiffusionTrainer(args, logging=True)
-    #     trainer.train()
-    # else:
-    #     trainer = SDEDiffusionTrainer(args, logging=False)
-    #     trainer.train()
+    n_processes = jax.process_count()
+    if jax.process_index() == 0:
+        trainer = SDEDiffusionTrainer(args, logging=True)
+        trainer.train()
+    else:
+        trainer = SDEDiffusionTrainer(args, logging=False)
+        trainer.train()

@@ -27,7 +27,16 @@ class DiffusionDataset(Dataset):
 
         def __getitem__(self, index):
             sample = self.data[index]
-            conditional = self.conditional_data[index] if self.has_conditional else None
-            if self.transform:
-                sample = self.transform(sample)
-            return sample, conditional
+            if self.has_conditional:
+                conditional = self.conditional_data[index]
+                if self.transform:
+                    sample = self.transform(sample)
+                return sample, conditional
+            else:
+                if self.transform:
+                    sample = self.transform(sample)
+                return sample
+
+
+        def get_shape(self):
+            return self.data.shape[1:]

@@ -87,7 +87,7 @@ class Corrector(ABC):
 
 class LangevinCorrector(Corrector):
 
-    def __call__(self, key: PRNGKeyArray, x: Array, t: Array, step_size: float) -> tuple[Array, Array]:
+    def __call__(self, key: PRNGKeyArray, x: Array, t: Array, step_size: float, conditional: Array | None = None) -> tuple[Array, Array]:
         x_mean = x
         for i in range(self.n_steps):
             grad = self.score(x, t.reshape(1))
@@ -158,10 +158,11 @@ class ScordBasedSDE(eqx.Module):
         loss = self.weight_function(random_t)* jnp.sum((score*std+z) ** 2)
         return loss
 
-    def score(self, x: Array, t: Array) -> Array:
+    def score(self, x: Array, t: Array, conditional: Array | None = None) -> Array:
         mean, std = self.sde.marginal_prob(x, t)
-        time_feature = self.time_embed(self.time_feature(x=t))
-        score = self.autoencoder(x, time_feature)/std
+        feature = self.time_embed(self.time_feature(x=t))
+        if conditional is not None: feature += conditional
+        score = self.autoencoder(x, feature)/std
         return score
 
     def sample(self,
@@ -220,11 +221,27 @@ class ScordBasedSDE(eqx.Module):
             x_mean = x_mean * (1. - mask) + masked_data_mean * mask
         return x, x_mean
 
-    def colorize(self):
-        raise NotImplementedError
+    def conditional_sample(self,
+                            key: PRNGKeyArray,
+                            data_shape: tuple[int],
+                            conditional: Array,
+                            n_steps:int,
+                            eps: float = 1e-3,):
+        self.predictor.score = self.score
+        self.corrector.score = self.score
+        key, subkey = jax.random.split(key)
+        x_init = self.sde.sample_prior(subkey, data_shape)
+        time_steps = jnp.linspace(self.sde.T, eps, n_steps)
+        step_size = time_steps[0] - time_steps[1]
+        x = x_init
+        x_mean = x_init
 
-    def conditional_sample(self):
-        raise NotImplementedError
+        for time_step in tqdm(time_steps):
+            key, subkey = jax.random.split(key)
+            x, x_mean = self.predictor(subkey, x, time_step, step_size)
+            key, subkey = jax.random.split(key)
+            x, x_mean = self.corrector(subkey, x, time_step, step_size)
+        return key, x, x_mean
     
     def evaluate_likelihood(self):
         raise NotImplementedError
