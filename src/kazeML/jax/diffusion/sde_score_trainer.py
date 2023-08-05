@@ -1,5 +1,4 @@
-from typing import Literal
-import argparse
+from typing import Literal, Type, Union
 from tap import Tap
 from jaxtyping import PyTree, Float, Array, PRNGKeyArray
 import jax
@@ -27,7 +26,6 @@ class SDEDiffusionExperimentParser(Tap):
     distributed: bool = False
     conditional: bool = False
 
-
     # Training hyperparameters
     n_epochs: int = 500
     batch_size: int = 16
@@ -39,18 +37,19 @@ class SDEDiffusionExperimentParser(Tap):
 
     def configure(self) -> None:
         model_parser = SDEDiffusionModelParser()
-        group = self.add_argument_group("Model")
-        group.add_argument
+        for key, value in model_parser.as_dict():
+            self.add_argument(f"--{key}", type=type(value), default=value)
 
 class SDEDiffusionTrainer:
 
     def __init__(self,
-                config: SDEDiffusionExperimentParser, logging: bool = False):
+                config: Union[SDEDiffusionExperimentParser, SDEDiffusionModelParser], logging: bool = False):
         self.config = config
         self.logging = logging
         if logging and (jax.process_index() == 0):
-            Task.init(project_name=args.project_name, task_name=args.experiment_name)
+            Task.init(project_name=config.project_name, task_name=config.experiment_name)
 
+        n_processes = jax.process_count()
         devices = np.array(jax.devices())
         self.global_mesh = jax.sharding.Mesh(devices, ('b'))
         self.sharding = jax.sharding.NamedSharding(self.global_mesh, jax.sharding.PartitionSpec(('b'),))
