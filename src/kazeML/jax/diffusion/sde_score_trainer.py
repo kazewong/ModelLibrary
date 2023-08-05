@@ -1,4 +1,5 @@
 from typing import Literal
+import argparse
 from tap import Tap
 from jaxtyping import PyTree, Float, Array, PRNGKeyArray
 import jax
@@ -37,7 +38,9 @@ class SDEDiffusionExperimentParser(Tap):
     train_test_ratio: float = 0.8
 
     def configure(self) -> None:
-        self.add_subparser("SDEDiffusionModelParser", SDEDiffusionModelParser, help="Model hyperparameters")
+        model_parser = SDEDiffusionModelParser()
+        group = self.add_argument_group("Model")
+        group.add_argument
 
 class SDEDiffusionTrainer:
 
@@ -169,16 +172,17 @@ class SDEDiffusionTrainer:
 
 if __name__ == "__main__":
 
-    args = SDEDiffusionExperimentParser().parse_args()
+    exp_args = SDEDiffusionExperimentParser(add_help=False)
+    model_args = SDEDiffusionModelParser(add_help=False)
+    args = Tap(parents=[exp_args, model_args]).parse_args()
+    # if args.distributed == True:
+    #     initialize()
+    #     print(jax.process_count())
 
-    if args.distributed == True:
-        initialize()
-        print(jax.process_count())
-
-    n_processes = jax.process_count()
-    if jax.process_index() == 0:
-        trainer = SDEDiffusionTrainer(args, logging=True)
-        trainer.train()
-    else:
-        trainer = SDEDiffusionTrainer(args, logging=False)
-        trainer.train()
+    # n_processes = jax.process_count()
+    # if jax.process_index() == 0:
+    #     trainer = SDEDiffusionTrainer(args, logging=True)
+    #     trainer.train()
+    # else:
+    #     trainer = SDEDiffusionTrainer(args, logging=False)
+    #     trainer.train()
