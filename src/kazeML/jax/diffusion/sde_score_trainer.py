@@ -37,6 +37,25 @@ class SDEDiffusionExperimentParser(Tap):
     num_workers: int = 8
     train_test_ratio: float = 0.8
 
+class SDEDiffusionModelParser(Tap):
+
+    SDE: str = "VESDE"
+
+    # Model hyperparameters
+    time_feature: int = 128
+    scale: float = 30.0
+    sigma_min: float = 0.3
+    sigma_max: float = 10.0
+    N: int = 300
+
+    # UNet hyperparameters
+    autoencoder_embed_dim: int = 256
+    hidden_layer: list[int] = [3,16,32,64,128]
+    group_norm_size: int = 32
+
+    # Predictor hyperparameters
+
+
 class BigParser(SDEDiffusionExperimentParser, SDEDiffusionModelParser):
     pass
 class SDEDiffusionTrainer:
@@ -83,8 +102,8 @@ class SDEDiffusionTrainer:
         self.key, subkey = jax.random.split(self.key)
         time_embed = eqx.nn.Linear(config.time_feature, config.autoencoder_embed_dim, key=subkey)
         self.key, subkey = jax.random.split(self.key)
-        gaussian_feature = GaussianFourierFeatures(config.time_feature, subkey)
-        sde_func = VESDE(sigma_min=0.3,sigma_max=10,N=1000) # Choosing the sigma drastically affects the training speed
+        gaussian_feature = GaussianFourierFeatures(config.time_feature, subkey, scale=config.scale)
+        sde_func = VESDE(sigma_min=config.sigma_min, sigma_max=config.sigma_max, N=config.N)
         self.model = ScordBasedSDE(unet,
                                     gaussian_feature,
                                     time_embed,

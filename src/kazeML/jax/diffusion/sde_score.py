@@ -3,20 +3,11 @@ import jax
 import jax.numpy as jnp
 from jaxtyping import Array, PRNGKeyArray
 from typing import Callable
+from kazeML.jax.common.Unet import Unet
 from kazeML.jax.diffusion.sde import SDE
 from abc import ABC, abstractmethod
 from tqdm import tqdm
 from tap import Tap
-
-class SDEDiffusionModelParser(Tap):
-
-    SDE: str = "VESDE"
-
-    # Model hyperparameters
-    time_feature: int = 128
-    autoencoder_embed_dim: int = 256
-    hidden_layer: list[int] = [3,16,32,64,128]
-    group_norm_size: int = 32
 
 class GaussianFourierFeatures(eqx.Module):
 
@@ -63,7 +54,7 @@ class Predictor(ABC):
 
 class EulerMaruyamaPredictor(Predictor):
 
-    def __call__(self,  key: PRNGKeyArray, x: Array, time: float, step_size: float) -> tuple[Array, Array]:
+    def __call__(self,  key: PRNGKeyArray, x: Array, time: Array, step_size: float) -> tuple[Array, Array]:
         drift, diffusion = self.sde.reverse_sde(x, time.reshape(1), self.score)
         x_mean = x - drift * step_size
         key, subkey = jax.random.split(key)
@@ -96,7 +87,7 @@ class Corrector(ABC):
 
 class LangevinCorrector(Corrector):
 
-    def __call__(self, key: PRNGKeyArray, x: Array, t: float, step_size: float) -> tuple[Array, Array]:
+    def __call__(self, key: PRNGKeyArray, x: Array, t: Array, step_size: float) -> tuple[Array, Array]:
         x_mean = x
         for i in range(self.n_steps):
             grad = self.score(x, t.reshape(1))
@@ -117,7 +108,7 @@ class NoneCorrector(Corrector):
 
 class ScordBasedSDE(eqx.Module):
 
-    autoencoder: eqx.Module
+    autoencoder: Unet
     time_feature: GaussianFourierFeatures
     time_embed: eqx.nn.Linear
     weight_function: Callable
@@ -130,7 +121,7 @@ class ScordBasedSDE(eqx.Module):
         return self.autoencoder.n_dim
 
     def __init__(self,
-                autoencoder: eqx.Module,
+                autoencoder: Unet,
                 time_feature: GaussianFourierFeatures,
                 time_embed: eqx.nn.Linear,
                 weight_function: Callable,
@@ -167,7 +158,7 @@ class ScordBasedSDE(eqx.Module):
         loss = self.weight_function(random_t)* jnp.sum((score*std+z) ** 2)
         return loss
 
-    def score(self, x: Array, t: float) -> Array:
+    def score(self, x: Array, t: Array) -> Array:
         mean, std = self.sde.marginal_prob(x, t)
         time_feature = self.time_embed(self.time_feature(x=t))
         score = self.autoencoder(x, time_feature)/std
