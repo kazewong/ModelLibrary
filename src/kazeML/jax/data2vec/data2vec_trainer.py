@@ -129,7 +129,7 @@ class SDEDiffusionTrainer:
     @staticmethod
     @eqx.filter_jit
     def test_step(
-        model: ScordBasedSDE,
+        model: ScoreBasedSDE,
         batch: Float[Array, "batch 1 datashape"],
         key: PRNGKeyArray,
     ):
@@ -138,13 +138,13 @@ class SDEDiffusionTrainer:
         return loss_values
 
     def train_epoch(self,
-        model: ScordBasedSDE,
+        model: ScoreBasedSDE,
         opt_state: PyTree,
         trainloader: DataLoader,
         key: PRNGKeyArray,
         epoch: int,
         log_loss: bool = False,
-    ) -> tuple[ScordBasedSDE, PyTree, Array | float]:
+    ) -> tuple[ScoreBasedSDE, PyTree, Array | float]:
         self.train_loader.sampler.set_epoch(epoch)
         train_loss = 0
         for batch in trainloader:
@@ -160,7 +160,7 @@ class SDEDiffusionTrainer:
         return model, opt_state, train_loss
 
     def test_epoch(self,
-        model: ScordBasedSDE,
+        model: ScoreBasedSDE,
         testloader: DataLoader,
         key: PRNGKeyArray,
         epoch: int,

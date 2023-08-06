@@ -13,7 +13,7 @@ from torch.utils.data.distributed import DistributedSampler
 from clearml import Task, Logger
 from kazeML.jax.common.Unet import Unet
 from kazeML.jax.diffusion.sde import VESDE
-from kazeML.jax.diffusion.sde_score import ScordBasedSDE, GaussianFourierFeatures, LangevinCorrector
+from kazeML.jax.diffusion.sde_score import ScoreBasedSDE, GaussianFourierFeatures, LangevinCorrector
 from kazeML.jax.diffusion.diffusion_dataset import DiffusionDataset
 from kazeML.jax.diffusion.sde_score_trainer import SDEDiffusionModelParser
 import numpy as np
@@ -52,7 +52,7 @@ class SDEDiffusionPipeline:
             self.key, subkey = jax.random.split(self.key)
             gaussian_feature = GaussianFourierFeatures(config.time_feature, subkey, scale=config.scale)
             sde_func = VESDE(sigma_min=config.sigma_min, sigma_max=config.sigma_max, N=config.N)
-            self.model = ScordBasedSDE(unet,
+            self.model = ScoreBasedSDE(unet,
                                         gaussian_feature,
                                         time_embed,
                                         lambda x: 1,
