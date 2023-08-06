@@ -115,7 +115,7 @@ class NoneCorrector(Corrector):
    def __call__(self, key: PRNGKeyArray, x: Array, t: float, step_size: float) -> tuple[Array, Array]:
        return x, x
 
-class ScordBasedSDE(eqx.Module):
+class ScoreBasedSDE(eqx.Module):
 
     autoencoder: eqx.Module
     time_feature: GaussianFourierFeatures

@@ -14,7 +14,7 @@ import matplotlib.pyplot as plt
 from torchvision.utils import make_grid
 import numpy as np
 
-from kazeML.jax.diffusion.sde_score import ScordBasedSDE, GaussianFourierFeatures, LangevinCorrector
+from kazeML.jax.diffusion.sde_score import ScoreBasedSDE, GaussianFourierFeatures, LangevinCorrector
 from kazeML.jax.common.Unet import Unet
 from kazeML.jax.diffusion.sde import VESDE
 
@@ -35,7 +35,7 @@ time_embed = eqx.nn.Sequential([
     eqx.nn.Linear(TIME_FEATURE, AUTOENCODER_EMBED_DIM, key=jax.random.PRNGKey(57104)),
     eqx.nn.Lambda(lambda x: jax.nn.swish(x))])
 sde_func = VESDE(sigma_min=0.3,sigma_max=10,N=1000) # Choosing the sigma drastically affects the training speed
-model = ScordBasedSDE(unet,
+model = ScoreBasedSDE(unet,
                     GaussianFourierFeatures(128, subkey),
                     time_embed,
                     lambda x: 1,
@@ -70,7 +70,7 @@ testloader = torch.utils.data.DataLoader(
 )
 
 def train(
-    sde: ScordBasedSDE,
+    sde: ScoreBasedSDE,
     trainloader: torch.utils.data.DataLoader,
     testloader: torch.utils.data.DataLoader,
     key: PRNGKeyArray,
@@ -82,7 +82,7 @@ def train(
 
     @eqx.filter_jit
     def make_step(
-        model: ScordBasedSDE,
+        model: ScoreBasedSDE,
         opt_state: PyTree,
         batch: Float[Array, "batch 1 28 28"],
         key: PRNGKeyArray,

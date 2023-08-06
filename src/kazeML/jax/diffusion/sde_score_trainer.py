@@ -12,7 +12,7 @@ from torch.utils.data.distributed import DistributedSampler
 from clearml import Task, Logger
 from kazeML.jax.common.Unet import Unet
 from kazeML.jax.diffusion.sde import VESDE
-from kazeML.jax.diffusion.sde_score import ScordBasedSDE, GaussianFourierFeatures, LangevinCorrector, SDEDiffusionModelParser
+from kazeML.jax.diffusion.sde_score import ScoreBasedSDE, GaussianFourierFeatures, LangevinCorrector, SDEDiffusionModelParser
 from kazeML.jax.diffusion.diffusion_dataset import DiffusionDataset
 import numpy as np
 
@@ -82,7 +82,7 @@ class SDEDiffusionTrainer:
         self.key, subkey = jax.random.split(self.key)
         gaussian_feature = GaussianFourierFeatures(config.time_feature, subkey)
         sde_func = VESDE(sigma_min=0.3,sigma_max=10,N=1000) # Choosing the sigma drastically affects the training speed
-        self.model = ScordBasedSDE(unet,
+        self.model = ScoreBasedSDE(unet,
                                     gaussian_feature,
                                     time_embed,
                                     lambda x: 1,
@@ -123,7 +123,7 @@ class SDEDiffusionTrainer:
     @staticmethod
     @eqx.filter_jit
     def train_step(
-        model: ScordBasedSDE,
+        model: ScoreBasedSDE,
         opt_state: PyTree,
         batch: Float[Array, "batch 1 datashape"],
         key: PRNGKeyArray,
@@ -139,7 +139,7 @@ class SDEDiffusionTrainer:
     @staticmethod
     @eqx.filter_jit
     def test_step(
-        model: ScordBasedSDE,
+        model: ScoreBasedSDE,
         batch: Float[Array, "batch 1 datashape"],
         key: PRNGKeyArray,
     ):
@@ -148,13 +148,13 @@ class SDEDiffusionTrainer:
         return loss_values
 
     def train_epoch(self,
-        model: ScordBasedSDE,
+        model: ScoreBasedSDE,
         opt_state: PyTree,
         trainloader: DataLoader,
         key: PRNGKeyArray,
         epoch: int,
         log_loss: bool = False,
-    ) -> tuple[ScordBasedSDE, PyTree, Array | float]:
+    ) -> tuple[ScoreBasedSDE, PyTree, Array | float]:
         self.train_loader.sampler.set_epoch(epoch)
         train_loss = 0
         for batch in trainloader:
@@ -170,7 +170,7 @@ class SDEDiffusionTrainer:
         return model, opt_state, train_loss
 
     def test_epoch(self,
-        model: ScordBasedSDE,
+        model: ScoreBasedSDE,
         testloader: DataLoader,
         key: PRNGKeyArray,
         epoch: int,

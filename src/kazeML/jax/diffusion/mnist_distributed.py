@@ -11,7 +11,7 @@ from torch.utils.data.distributed import DistributedSampler
 import numpy as np
 from clearml import Task
 from kazeML.jax.diffusion.sde import VESDE
-from kazeML.jax.diffusion.sde_score import ScordBasedSDE, GaussianFourierFeatures
+from kazeML.jax.diffusion.sde_score import ScoreBasedSDE, GaussianFourierFeatures
 from kazeML.jax.common.Unet import Unet
 
 
@@ -38,7 +38,7 @@ key, subkey = jax.random.split(key)
 unet = Unet(2, [1,16,32,64,128], AUTOENCODER_EMBED_DIM, key, group_norm_size = 32)
 time_embed = eqx.nn.Linear(TIME_FEATURE, AUTOENCODER_EMBED_DIM, key=jax.random.PRNGKey(57104))
 sde_func = VESDE(sigma_min=0.3,sigma_max=10,N=300) # Choosing the sigma drastically affects the training speed
-model = ScordBasedSDE(unet,
+model = ScoreBasedSDE(unet,
                     GaussianFourierFeatures(128, subkey),
                     time_embed,
                     lambda x: 1,
@@ -94,7 +94,7 @@ testloader = DataLoader(test_dataset,
 
 
 def train(
-    model: ScordBasedSDE,
+    model: ScoreBasedSDE,
     trainloader: DataLoader,
     testloader: DataLoader,
     key: PRNGKeyArray,
@@ -106,7 +106,7 @@ def train(
 
     @eqx.filter_jit
     def train_step(
-        model: ScordBasedSDE,
+        model: ScoreBasedSDE,
         opt_state: PyTree,
         batch: Float[Array, "batch 1 28 28"],
         key: PRNGKeyArray,
@@ -120,7 +120,7 @@ def train(
         return model, opt_state, loss_values
 
     def train_epoch(
-        model: ScordBasedSDE,
+        model: ScoreBasedSDE,
         opt_state: PyTree,
         trainloader: DataLoader,
         key: PRNGKeyArray,
@@ -143,7 +143,7 @@ def train(
 
     @eqx.filter_jit
     def test_step(
-        model: ScordBasedSDE,
+        model: ScoreBasedSDE,
         batch: Float[Array, "batch 1 28 28"],
         key: PRNGKeyArray,
     ):
@@ -152,7 +152,7 @@ def train(
         return loss_values
 
     def test_epoch(
-        model: ScordBasedSDE,
+        model: ScoreBasedSDE,
         testloader: DataLoader,
         key: PRNGKeyArray,
         epoch: int,
