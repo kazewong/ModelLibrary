@@ -66,6 +66,10 @@ class SDEDiffusionPipeline:
 
             self.model = self.model.load_model(config.model_path)
 
+        def unconditional_sampling(self, key: PRNGKeyArray, n_samples: int, n_steps: int) -> Array:
+            key = jax.random.split(key, n_samples)
+            return jax.vmap(self.model.sample, in_axes=(0,None,None))(key, self.config.data_shape, n_steps)
+
 
 
 if __name__ == "__main__":

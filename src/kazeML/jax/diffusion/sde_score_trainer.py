@@ -28,6 +28,10 @@ class SDEDiffusionExperimentParser(Tap):
     distributed: bool = False
     conditional: bool = False
 
+    # Dataset hyperparameters
+
+    normalize: bool = True
+
     # Training hyperparameters
     n_epochs: int = 500
     batch_size: int = 16
@@ -77,7 +81,12 @@ class SDEDiffusionTrainer:
         self.global_mesh = jax.sharding.Mesh(devices, ('b'))
         self.sharding = jax.sharding.NamedSharding(self.global_mesh, jax.sharding.PartitionSpec(('b'),))
 
-        train_set, test_set = random_split(DiffusionDataset(self.config.data_path), [config.train_test_ratio, 1 - config.train_test_ratio])
+        transform = []
+        if config.normalize:
+            transform.append(lambda x: (x / 255.0)-0.5)
+
+
+        train_set, test_set = random_split(DiffusionDataset(self.config.data_path, transform=transform), [config.train_test_ratio, 1 - config.train_test_ratio])
         train_sampler = DistributedSampler(train_set,
                                            num_replicas=n_processes,
                                            rank=jax.process_index(),
@@ -107,7 +116,7 @@ class SDEDiffusionTrainer:
         time_embed = eqx.nn.Linear(config.time_feature, config.autoencoder_embed_dim, key=subkey)
         self.key, subkey = jax.random.split(self.key)
         gaussian_feature = GaussianFourierFeatures(config.time_feature, subkey)
-        sde_func = VESDE(sigma_min=0.3,sigma_max=10,N=1000) # Choosing the sigma drastically affects the training speed
+        sde_func = VESDE(sigma_min=config.sigma_min,sigma_max=config.sigma_max,N=config.N) # Choosing the sigma drastically affects the training speed
         self.model = ScoreBasedSDE(unet,
                                     gaussian_feature,
                                     time_embed,
@@ -179,7 +188,7 @@ class SDEDiffusionTrainer:
 
     @staticmethod
     @eqx.filter_jit
-    def train_step(
+    def run_step(
         model: ScoreBasedSDE,
         opt_state: PyTree,
         batch: Float[Array, "batch 1 datashape"],
@@ -198,29 +207,18 @@ class SDEDiffusionTrainer:
             loss_values = single_device_loss(model, batch, keys)
             return model, opt_state, loss_values
         
-
-    @staticmethod
-    @eqx.filter_jit
-    def test_step(
-        model: ScoreBasedSDE,
-        batch: Float[Array, "batch 1 datashape"],
-        key: PRNGKeyArray,
-    ):
-        keys = jax.random.split(key, batch.shape[0])
-        loss_values = jnp.mean(jax.vmap(model.loss)(batch, keys))
-        return loss_values
-
-    def train_epoch(self,
+    def run_epoch(self,
         model: ScoreBasedSDE,
         opt_state: PyTree,
         data_loader: DataLoader,
         key: PRNGKeyArray,
         epoch: int,
         log_loss: bool = False,
+        train: bool = True
     ) -> tuple[ScoreBasedSDE, PyTree, Array | float]:
-        self.train_loader.sampler.set_epoch(epoch)
-        train_loss = 0
-        for batch in trainloader:
+        data_loader.sampler.set_epoch(epoch)
+        loss = 0
+        for batch in data_loader:
             key, subkey = jax.random.split(key)
             local_batch = jnp.array(batch)
             global_shape = (jax.process_count() * local_batch.shape[0], ) + self.data_shape
@@ -231,20 +229,6 @@ class SDEDiffusionTrainer:
             if log_loss: loss += jnp.sum(process_allgather(loss_values))
         loss = loss/ jax.process_count() / len(data_loader) /np.sum(self.data_shape)
         return model, opt_state, loss
-
-    def test_epoch(self,
-        model: ScoreBasedSDE,
-        testloader: DataLoader,
-        key: PRNGKeyArray,
-        log_t_step: int,
-    ):
-        time = jnp.linspace(0, 1, log_t_step)
-        keys = jax.random.split(key, batch.shape[0])
-        result = []
-        for t in time:
-            score = jax.vmap(model.score)(batch, t)
-            result.append(jnp.median(score))
-        return result
 
 
 if __name__ == "__main__":
@@ -258,11 +242,11 @@ if __name__ == "__main__":
     n_processes = jax.process_count()
     if jax.process_index() == 0:
         trainer = SDEDiffusionTrainer(args, logging=True)
+        with open(args.output_path+'/args.json', "w") as file:
+            output_dict = args.as_dict()
+            output_dict['data_shape'] = trainer.data_shape
+            json.dump(output_dict, file, indent=4)
         trainer.train()
     else:
         trainer = SDEDiffusionTrainer(args, logging=False)
         trainer.train()
-    with open(args.output_path+'/args.json', "w") as file:
-        output_dict = args.as_dict()
-        output_dict['data_shape'] = trainer.data_shape
-        json.dump(output_dict, file)

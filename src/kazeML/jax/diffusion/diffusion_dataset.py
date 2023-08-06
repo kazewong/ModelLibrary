@@ -29,12 +29,14 @@ class DiffusionDataset(Dataset):
             sample = self.data[index]
             if self.has_conditional:
                 conditional = self.conditional_data[index]
-                if self.transform:
-                    sample = self.transform(sample)
+                if self.transform != None:
+                    for f in self.transform:
+                        sample = f(sample)
                 return sample, conditional
             else:
-                if self.transform:
-                    sample = self.transform(sample)
+                if self.transform != None:
+                    for f in self.transform:
+                        sample = f(sample)
                 return sample
 
 
