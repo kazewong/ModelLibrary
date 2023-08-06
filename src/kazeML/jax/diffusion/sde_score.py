@@ -263,4 +263,4 @@ class ScoreBasedSDE(eqx.Module):
         eqx.tree_serialise_leaves(path+".eqx", self)
 
     def load_model(self, path: str):
-        eqx.tree_deserialise_leaves(path+".eqx", self)
+        return eqx.tree_deserialise_leaves(path+".eqx", self)

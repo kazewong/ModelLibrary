@@ -16,6 +16,7 @@ from kazeML.jax.diffusion.sde import VESDE
 from kazeML.jax.diffusion.sde_score import ScoreBasedSDE, GaussianFourierFeatures, LangevinCorrector
 from kazeML.jax.diffusion.diffusion_dataset import DiffusionDataset
 import numpy as np
+import json
 
 
 class SDEDiffusionExperimentParser(Tap):
@@ -99,7 +100,6 @@ class SDEDiffusionTrainer:
                                         pin_memory=True)
 
         self.data_shape = train_set.dataset.get_shape()
-
 
         self.key, subkey = jax.random.split(jax.random.PRNGKey(config.seed))
         unet = Unet(len(self.data_shape)-1, config.hidden_layer, config.autoencoder_embed_dim, subkey, group_norm_size=config.group_norm_size)
@@ -250,15 +250,19 @@ class SDEDiffusionTrainer:
 if __name__ == "__main__":
 
     args = BigParser().parse_args()
-    args.save(args.output_path+'/args.json')
-    # if args.distributed == True:
-    #     initialize()
-    #     print(jax.process_count())
 
-    # n_processes = jax.process_count()
-    # if jax.process_index() == 0:
-    #     trainer = SDEDiffusionTrainer(args, logging=True)
-    #     trainer.train()
-    # else:
-    #     trainer = SDEDiffusionTrainer(args, logging=False)
-    #     trainer.train()
+    if args.distributed == True:
+        initialize()
+        print(jax.process_count())
+
+    n_processes = jax.process_count()
+    if jax.process_index() == 0:
+        trainer = SDEDiffusionTrainer(args, logging=True)
+        trainer.train()
+    else:
+        trainer = SDEDiffusionTrainer(args, logging=False)
+        trainer.train()
+    with open(args.output_path+'/args.json', "w") as file:
+        output_dict = args.as_dict()
+        output_dict['data_shape'] = trainer.data_shape
+        json.dump(output_dict, file)

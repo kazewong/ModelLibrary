@@ -17,6 +17,7 @@ from kazeML.jax.diffusion.sde_score import ScoreBasedSDE, GaussianFourierFeature
 from kazeML.jax.diffusion.diffusion_dataset import DiffusionDataset
 from kazeML.jax.diffusion.sde_score_trainer import SDEDiffusionModelParser
 import numpy as np
+import json
 
 class SDEDiffusionPipelineParser(Tap):
 
@@ -38,6 +39,10 @@ class SDEDiffusionPipeline:
 
         def __init__(self,
                 config: SDEDiffusionPipelineParser):
+            with open(config.config_path, "r") as file:
+                config_file_dict = json.load(file)
+            config = config.from_dict(config_file_dict)
+
             self.config = config
 
             # n_processes = jax.process_count()
@@ -46,7 +51,7 @@ class SDEDiffusionPipeline:
             # self.sharding = jax.sharding.NamedSharding(self.global_mesh, jax.sharding.PartitionSpec(('b'),))
 
             self.key, subkey = jax.random.split(jax.random.PRNGKey(config.seed))
-            unet = Unet(len(self.data_shape)-1, config.hidden_layer, config.autoencoder_embed_dim, subkey, group_norm_size=config.group_norm_size)
+            unet = Unet(len(config.data_shape)-1, config.hidden_layer, config.autoencoder_embed_dim, subkey, group_norm_size=config.group_norm_size)
             self.key, subkey = jax.random.split(self.key)
             time_embed = eqx.nn.Linear(config.time_feature, config.autoencoder_embed_dim, key=subkey)
             self.key, subkey = jax.random.split(self.key)
@@ -58,6 +63,8 @@ class SDEDiffusionPipeline:
                                         lambda x: 1,
                                         sde_func,
                                         corrector=LangevinCorrector(sde_func, lambda x: x, 0.017, 1),)
+
+            self.model = self.model.load_model(config.model_path)
 
 
 
