@@ -33,7 +33,7 @@ class SDEDiffusionExperimentParser(Tap):
     normalize: bool = True
 
     # Training hyperparameters
-    n_epochs: int = 500
+    n_epochs: int = 100
     batch_size: int = 16
     learning_rate: float = 1e-4
     seed: int = 2019612721831
@@ -115,12 +115,12 @@ class SDEDiffusionTrainer:
         self.key, subkey = jax.random.split(self.key)
         time_embed = eqx.nn.Linear(config.time_feature, config.autoencoder_embed_dim, key=subkey)
         self.key, subkey = jax.random.split(self.key)
-        gaussian_feature = GaussianFourierFeatures(config.time_feature, subkey)
+        gaussian_feature = GaussianFourierFeatures(config.time_feature, subkey, scale=config.scale)
         sde_func = VESDE(sigma_min=config.sigma_min,sigma_max=config.sigma_max,N=config.N) # Choosing the sigma drastically affects the training speed
         self.model = ScoreBasedSDE(unet,
                                     gaussian_feature,
                                     time_embed,
-                                    lambda x: 1,
+                                    lambda t: 1./sde_func.marginal_prob(None,t)[1],
                                     sde_func,
                                     corrector=LangevinCorrector(sde_func, lambda x: x, 0.017, 1),)
 
