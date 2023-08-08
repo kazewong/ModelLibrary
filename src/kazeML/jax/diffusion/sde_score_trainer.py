@@ -17,6 +17,7 @@ from kazeML.jax.diffusion.sde_score import ScoreBasedSDE, GaussianFourierFeature
 from kazeML.jax.diffusion.diffusion_dataset import DiffusionDataset
 import numpy as np
 import json
+import os
 
 
 class SDEDiffusionExperimentParser(Tap):
@@ -63,6 +64,7 @@ class SDEDiffusionModelParser(Tap):
     group_norm_size: int = 32
     stride: list[int] = [1]
     dilation: list[int]= [1]
+    layer_norm: bool = False
 
     # Predictor hyperparameters
 
@@ -123,7 +125,7 @@ class SDEDiffusionTrainer:
         self.data_shape = train_set.dataset.get_shape()
 
         self.key, subkey = jax.random.split(jax.random.PRNGKey(config.seed))
-        unet = Unet(len(self.data_shape)-1, config.hidden_layer, config.autoencoder_embed_dim, subkey, group_norm_size=config.group_norm_size, stride=config.stride, dilation=config.dilation)
+        unet = Unet(len(self.data_shape)-1, config.hidden_layer, config.autoencoder_embed_dim, subkey, group_norm_size=config.group_norm_size, stride=config.stride, dilation=config.dilation, layer_norm=config.layer_norm)
         self.key, subkey = jax.random.split(self.key)
         time_embed = eqx.nn.Linear(config.time_feature, config.autoencoder_embed_dim, key=subkey)
         self.key, subkey = jax.random.split(self.key)
@@ -132,7 +134,7 @@ class SDEDiffusionTrainer:
         self.model = ScoreBasedSDE(unet,
                                     gaussian_feature,
                                     time_embed,
-                                    lambda t: 1./sde_func.marginal_prob(None,t)[1],
+                                    lambda t: sde_func.marginal_prob(None,t)[1],
                                     sde_func,
                                     corrector=LangevinCorrector(sde_func, lambda x: x, 0.017, 1),)
 
@@ -254,6 +256,8 @@ if __name__ == "__main__":
     n_processes = jax.process_count()
     if jax.process_index() == 0:
         trainer = SDEDiffusionTrainer(args, logging=True)
+        if not os.path.exists(args.output_path):
+            os.makedirs(args.output_path)
         with open(args.output_path+'/args.json', "w") as file:
             output_dict = args.as_dict()
             output_dict['data_shape'] = trainer.data_shape
