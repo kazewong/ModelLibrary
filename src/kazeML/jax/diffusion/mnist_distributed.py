@@ -49,17 +49,17 @@ optimizer = optax.adam(LEARNING_RATE)
 normalize_data = torchvision.transforms.Compose(
     [
         torchvision.transforms.ToTensor(),
-        torchvision.transforms.Normalize((0.5,), (0.5,)),
+        # torchvision.transforms.Normalize((0.5,), (0.5,)),
     ]
 )
 train_dataset = torchvision.datasets.MNIST(
-    "./data/MNIST",
+    "./MNIST",
     train=True,
     download=True,
     transform=normalize_data,
 )
 test_dataset = torchvision.datasets.MNIST(
-    "./data/MNIST",
+    "./MNIST",
     train=False,
     download=True,
     transform=normalize_data,

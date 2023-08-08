@@ -61,6 +61,15 @@ class EulerMaruyamaPredictor(Predictor):
         x = x_mean + diffusion* jnp.sqrt(step_size) * jax.random.normal(subkey, x.shape)      
         return x, x_mean
 
+class ReverseDiffusionPredictor(Predictor):
+
+    def __call__(self, key: PRNGKeyArray, x: Array, time: Array, step_size: float) -> tuple[Array, Array]:
+        drift, diffusion = self.sde.reverse_discretize(x, time.reshape(1), self.score)
+        x_mean = x - drift
+        key, subkey = jax.random.split(key)
+        x = x_mean + diffusion * jax.random.normal(subkey, x.shape)      
+        return x, x_mean
+
 class Corrector(ABC):
   """The abstract class for a corrector algorithm."""
 
@@ -168,7 +177,7 @@ class ScoreBasedSDE(eqx.Module):
                 key: PRNGKeyArray,
                 data_shape: tuple[int],
                 n_steps:int,
-                eps: float = 1e-3,
+                eps: float = 1e-5,
                 ) -> tuple[Array, Array, PRNGKeyArray]:
         self.predictor.score = self.score
         self.corrector.score = self.score

@@ -120,7 +120,7 @@ class SDEDiffusionTrainer:
         self.model = ScoreBasedSDE(unet,
                                     gaussian_feature,
                                     time_embed,
-                                    lambda t: 1./sde_func.marginal_prob(None,t)[1],
+                                    lambda t: 1.,#/sde_func.marginal_prob(None,t)[1],
                                     sde_func,
                                     corrector=LangevinCorrector(sde_func, lambda x: x, 0.017, 1),)
 

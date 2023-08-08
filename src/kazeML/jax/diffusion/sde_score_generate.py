@@ -68,7 +68,10 @@ class SDEDiffusionPipeline:
 
         def unconditional_sampling(self, key: PRNGKeyArray, n_samples: int, n_steps: int) -> Array:
             key = jax.random.split(key, n_samples)
-            return jax.vmap(self.model.sample, in_axes=(0,None,None))(key, self.config.data_shape, n_steps)
+            return jax.vmap(self.model.sample, in_axes=(0,None,None, None))(key, self.config.data_shape, n_steps, 1e-5)
+
+        def inpaint(self, key: PRNGKeyArray, data: Array, mask: Array, n_steps: int) -> Array:
+            return self.model.inpaint(key, data, mask, n_steps)
 
 
 
