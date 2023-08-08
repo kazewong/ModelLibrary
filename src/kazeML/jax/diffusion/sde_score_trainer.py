@@ -61,8 +61,20 @@ class SDEDiffusionModelParser(Tap):
     autoencoder_embed_dim: int = 256
     hidden_layer: list[int] = [3,16,32,64,128]
     group_norm_size: int = 32
+    stride: list[int] = [1]
+    dilation: list[int]= [1]
 
     # Predictor hyperparameters
+
+    def process_args(self):
+        if len(self.stride) == 1:
+            self.stride = self.stride[0]
+        else:
+            assert len(self.stride) == len(self.hidden_layer), "Stride must be of the same length as the number of hidden layers"
+        if len(self.dilation) == 1:
+            self.dilation = self.dilation[0]
+        else:
+            assert len(self.dilation) == len(self.hidden_layer), "Dilation must be of the same length as the number of hidden layers"
 
 class BigParser(SDEDiffusionExperimentParser, SDEDiffusionModelParser):
     pass
@@ -111,7 +123,7 @@ class SDEDiffusionTrainer:
         self.data_shape = train_set.dataset.get_shape()
 
         self.key, subkey = jax.random.split(jax.random.PRNGKey(config.seed))
-        unet = Unet(len(self.data_shape)-1, config.hidden_layer, config.autoencoder_embed_dim, subkey, group_norm_size=config.group_norm_size)
+        unet = Unet(len(self.data_shape)-1, config.hidden_layer, config.autoencoder_embed_dim, subkey, group_norm_size=config.group_norm_size, stride=config.stride, dilation=config.dilation)
         self.key, subkey = jax.random.split(self.key)
         time_embed = eqx.nn.Linear(config.time_feature, config.autoencoder_embed_dim, key=subkey)
         self.key, subkey = jax.random.split(self.key)
@@ -120,7 +132,7 @@ class SDEDiffusionTrainer:
         self.model = ScoreBasedSDE(unet,
                                     gaussian_feature,
                                     time_embed,
-                                    lambda t: 1.,#/sde_func.marginal_prob(None,t)[1],
+                                    lambda t: 1./sde_func.marginal_prob(None,t)[1],
                                     sde_func,
                                     corrector=LangevinCorrector(sde_func, lambda x: x, 0.017, 1),)
 

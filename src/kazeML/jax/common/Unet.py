@@ -98,7 +98,7 @@ class Unet(eqx.Module):
             else:
                 dilation_local = dilation
             self.blocks.append(UnetBlock(num_dim, channels[i], channels[i + 1], embedding_dim=embedding_dim, key=key, stride=stride_local, dilation=dilation_local,**kwargs))
-        self.conv_out = eqx.nn.Conv(num_dim, channels[1], channels[0], padding=1, kernel_size=3, key=subkey)
+        self.conv_out = eqx.nn.Conv(num_dim, channels[0], channels[0], padding=1, kernel_size=3, key=subkey)
         
     def __call__(self, x: Array, t: Array) -> Array:
         latent = []
@@ -106,9 +106,11 @@ class Unet(eqx.Module):
             x = block.encode(x, t)
             latent.append(x)
         x = self.blocks[-1].encode(x, t)
+        x = self.blocks[-1].decode(x, t)
         for block in reversed(self.blocks[1:]):
             x = block.decode(x, t)
             x = x + latent.pop()
+        x = self.blocks[0].decode(x, t)
         x = self.conv_out(x)
         return x
 
