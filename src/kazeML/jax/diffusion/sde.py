@@ -81,7 +81,26 @@ class SDE(eqx.Module):
         return rev_f, rev_G
 
 class VPSDE(SDE):
-    pass
+
+    beta: Callable
+
+    def __init__(self, beta: Callable):
+        self.beta = beta
+
+    def drift(self, x: Array, t: Array) -> Array:
+        return -x*beta(t)/2
+
+    def diffusion(self, x: Array, t: Array) -> Array:
+        return jnp.sqrt(beta(t))
+        
+    def marginal_prob(self, x: Array, t: Array) -> tuple[Array, Array]:
+        raise NotImplementedError
+
+    def sample_prior(self, rng: PRNGKeyArray, shape: tuple):
+        raise NotImplementedError
+
+    def logp_prior(self, z: Array):
+        raise NotImplementedError
 
 class subVPSDE(SDE):
     pass
