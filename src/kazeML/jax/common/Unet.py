@@ -74,7 +74,6 @@ class Unet(eqx.Module):
 
     blocks: list[UnetBlock]
     conv_out: eqx.nn.Conv
-    # linear_out: eqx.nn.Linear
 
     @property
     def n_dim(self):
@@ -114,10 +113,9 @@ class Unet(eqx.Module):
             self.blocks.append(UnetBlock(num_dim, channels[i], channels[i + 1], embedding_dim=embedding_dim, key=subkey, stride=stride_local, dilation=dilation_local, layer_norm = layer_norm))
         key, subkey = jax.random.split(key)
         self.conv_out = eqx.nn.Conv(num_dim, channels[0], channels[0], padding=0, kernel_size=1, key=subkey)
-        # key, subkey = jax.random.split(key)
-        # self.linear_out = eqx.nn.Linear(channels[0], channels[0], key=subkey)
 
     def __call__(self, x: Array, t: Array) -> Array:
+        x_shape = x.shape
         latent = []
         for block in self.blocks[:-1]:
             x = block.encode(x, t)
@@ -129,6 +127,5 @@ class Unet(eqx.Module):
             x = block.decode(x, t)
         x = self.blocks[0].decode(x, t)
         x = self.conv_out(x)
-        # x =  
         return x
 

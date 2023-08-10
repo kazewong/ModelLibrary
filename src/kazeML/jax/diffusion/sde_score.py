@@ -164,7 +164,7 @@ class ScoreBasedSDE(eqx.Module):
         mean, std = self.sde.marginal_prob(x, random_t)
         perturbed_x = mean + std * z
         score = self.score(perturbed_x, random_t)
-        loss = self.weight_function(random_t)* jnp.sum((score* std+z) ** 2)
+        loss = self.weight_function(random_t)* jnp.sum((score * std+z) ** 2)
         return loss
 
     def score(self, x: Array, t: Array) -> Array:

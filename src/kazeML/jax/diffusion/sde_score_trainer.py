@@ -28,6 +28,7 @@ class SDEDiffusionExperimentParser(Tap):
     project_name: str = "DiffusionAstro"
     distributed: bool = False
     conditional: bool = False
+    
 
     # Dataset hyperparameters
 
@@ -98,6 +99,8 @@ class SDEDiffusionTrainer:
         transform = []
         if config.normalize:
             transform.append(lambda x: (x / 255.0)-0.5)
+
+        transform.append(lambda x: x[:,x.shape[1]//2-64:x.shape[1]//2+64,x.shape[2]//2-64:x.shape[2]//2+64])
 
 
         train_set, test_set = random_split(DiffusionDataset(self.config.data_path, transform=transform), [config.train_test_ratio, 1 - config.train_test_ratio])

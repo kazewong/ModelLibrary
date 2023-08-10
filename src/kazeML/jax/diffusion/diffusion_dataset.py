@@ -41,4 +41,4 @@ class DiffusionDataset(Dataset):
 
 
         def get_shape(self):
-            return self.data.shape[1:]
+            return self[0].shape

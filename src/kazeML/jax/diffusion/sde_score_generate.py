@@ -79,3 +79,4 @@ if __name__ == "__main__":
 
     args = SDEDiffusionPipelineParser().parse_args()
     pipeline = SDEDiffusionPipeline(args)
+    model = pipeline.model
