@@ -11,7 +11,7 @@ from torch.utils.data import DataLoader, random_split
 from torch.utils.data.distributed import DistributedSampler
 from clearml import Task, Logger
 import numpy as np
-# from kazeML
+from kazeML.jax.data2vec.data2vec_dataset import Data2VecDataset
 from kazeML.jax.common.Transformer import TransformerConfig
 
 class Data2VecTrainer(Tap):
@@ -37,10 +37,12 @@ class Data2VecTrainer(Tap):
     log_epoch: int = 2
     seed: int = 2019612721831
     num_workers: int = 8
+    train_test_ratio: float = 0.8
 
 
 
-class SDEDiffusionTrainer:
+
+class Data2VecTrainer:
 
     def __init__(self,
                 config: Data2VecTrainer, logging: bool = False):
@@ -49,11 +51,16 @@ class SDEDiffusionTrainer:
         if logging and (jax.process_index() == 0):
             Task.init(project_name=args.project_name, task_name=args.experiment_name)
 
+        # Initialize distributed training
+        n_processes = jax.process_count()
         devices = np.array(jax.devices())
         self.global_mesh = jax.sharding.Mesh(devices, ('b'))
         self.sharding = jax.sharding.NamedSharding(self.global_mesh, jax.sharding.PartitionSpec(('b'),))
 
-        # train_set, test_set = #Fill here 
+
+        # Initialize the dataset
+        dataset = Data2VecDataset(config.data_path)
+        train_set, test_set = random_split(dataset, [config.train_test_ratio, 1 - config.train_test_ratio])
         train_sampler = DistributedSampler(train_set,
                                            num_replicas=n_processes,
                                            rank=jax.process_index(),
@@ -77,8 +84,11 @@ class SDEDiffusionTrainer:
 
         self.data_shape = train_set.dataset.get_shape()
 
+        # Initialize the model
 
+        
 
+        # Initialize the optimizer
         self.optimizer = optax.adam(config.learning_rate)
         self.opt_state = self.optimizer.init(eqx.filter(self.model, eqx.is_array))
 

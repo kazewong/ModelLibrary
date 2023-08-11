@@ -138,7 +138,6 @@ class TransformerEncoder(eqx.Module):
     # Feature TODO: add quantization
     # Feature TODO: add FSDP support
 
-    token_embedding: EmbedBase
     positional_embedding: PositionalEmbedding
     embedding_layer_norm: eqx.nn.LayerNorm | None
 
@@ -148,11 +147,8 @@ class TransformerEncoder(eqx.Module):
 
     def __init__(self,
                 key: PRNGKeyArray,
-                cfg: TransformerConfig,
-                embed_tokens: EmbedBase,):
+                cfg: TransformerConfig,):
 
-        # Set token embedding
-        self.token_embedding = embed_tokens
 
         # Set positional embedding
         key, subkey = jax.random.split(key)
@@ -175,24 +171,27 @@ class TransformerEncoder(eqx.Module):
         self.layer_norm = eqx.nn.LayerNorm(shape=cfg.embed_dim)
     
     def __call__(self,
+                embedding: Array,
                 key: PRNGKeyArray,
-                tokens: Array,
-                mask: Optional[Array] = None,) -> Array:
-        return self.forward(key, tokens, mask)
+                mask: Optional[Array] = None,) -> Array | list:
+        return self.forward(embedding, key, mask)
     
-    def embed(self, key: PRNGKeyArray, tokens: Array) -> Array:
-        embedding = self.token_embedding(tokens)
+    def encode_position(self, embedding: Array, key: PRNGKeyArray) -> Array:
         embedding += self.positional_embedding(embedding)
         embedding = self.dropout_block(embedding, key=key)
         if self.embedding_layer_norm is not None: embedding = self.embedding_layer_norm(embedding)
         return embedding
     
     def forward(self,
-                key: PRNGKeyArray,
                 embedding: Array,
+                key: PRNGKeyArray,
                 mask: Optional[Array] = None,
                 layer_result: bool = False,
                 ) -> Array | list:
+        """
+        Forward pass of the transformer encoder.
+        Input should already be embedded in an embedding space.
+        """
         key, subkey = jax.random.split(key)
         x = embedding
         if layer_result: 

@@ -102,8 +102,8 @@ class SDEDiffusionTrainer:
 
         transform.append(lambda x: x[:,x.shape[1]//2-64:x.shape[1]//2+64,x.shape[2]//2-64:x.shape[2]//2+64])
 
-
-        train_set, test_set = random_split(DiffusionDataset(self.config.data_path, transform=transform), [config.train_test_ratio, 1 - config.train_test_ratio])
+        dataset = DiffusionDataset(self.config.data_path, transform=transform)
+        train_set, test_set = random_split(dataset, [config.train_test_ratio, 1 - config.train_test_ratio])
         train_sampler = DistributedSampler(train_set,
                                            num_replicas=n_processes,
                                            rank=jax.process_index(),
