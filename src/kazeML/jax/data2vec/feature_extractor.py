@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+from jaxtyping import Array
 
 class FeatureExtractor(ABC):
 
@@ -7,7 +8,17 @@ class FeatureExtractor(ABC):
         pass
 
     @abstractmethod
-    def extract_features(self, data):
+    def extract_features(self,
+                         data: Array) -> Array:
+        """
+        
+        The first dimension should be number of patches and the second dimension should be size of embedding.
+        """
+        pass
+
+    @abstractmethod
+    def embed(self,
+            data: Array,) -> Array:
         pass
 
 class ImageFeatureExtractor(FeatureExtractor):

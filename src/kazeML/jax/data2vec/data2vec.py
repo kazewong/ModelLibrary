@@ -55,33 +55,51 @@ class Data2Vec(eqx.Module):
     def embed(self,
               x: Array,
               key: PRNGKeyArray) -> Array:
-        self.feature_extractor.extract_features(x)
-        x = self.encoder
+        feature = self.feature_extractor.extract_features(x)
+        return self.encoder(feature, key, None)
     
-    def forward(self, 
-                source: Array,
-                target: Array,
-                padding_mask: Array,
-                mask: bool = True,
-                ) -> Array:
+    def forward_pair(self, 
+                data: Array,
+                key: PRNGKeyArray,
+                ) -> tuple[Array, Array]:
         
-        # Feature extraction
+        key, subkey = jax.random.split(key)
+        x = self.feature_extractor.extract_features(data)
+        mask = jnp.zeros(x.shape[0])
+        mask_index = jax.random.choice(subkey, jnp.arange(x.shape[0]), shape=(int(x.shape[0]*self.mask_fraction),),replace=False)
+        mask = mask.at[mask_index].set(1)[:,None]
+        mask_x = x*(1-mask) + mask*self.mask_embedding
 
+        pos_embedding = self.encoder.positional_embedding(x)
+        x += pos_embedding
+        mask_x += pos_embedding
+
+        key, subkey = jax.random.split(key)
+        x = self.encoder.dropout_block(x, key=subkey)
+
+        key, subkey = jax.random.split(key)
+        mask_x = self.encoder.dropout_block(mask_x, key=subkey)
+        if self.encoder.embedding_layer_norm is not None:
+            x = self.encoder.embedding_layer_norm(x)
+            mask_x = self.encoder.embedding_layer_norm(mask_x)
         
+        key, subkey = jax.random.split(key)
+        y = self.ema.model.forward(x, subkey, None, layer_result=True)
+        y = y[-self.top_k_layer:]
+        y = jnp.mean(jnp.stack(y), axis=0)
 
-        # 
+        key, subkey = jax.random.split(key)
+        x = self.encoder.forward(mask_x, subkey, None, layer_result=False)
+        return x, y
 
-        # d2v loss
-
-
-
-        raise NotImplementedError
 
     def d2v_loss(self,
                  data: Array,
                  key: PRNGKeyArray,
                  ) -> Array:
-        raise NotImplementedError
+        student, teacher = self.forward_pair(data, key)
+        return jnp.mean((student-teacher)**2)
+
     
     def save_model(self, path: str):
         eqx.tree_serialise_leaves(path+".eqx", self)

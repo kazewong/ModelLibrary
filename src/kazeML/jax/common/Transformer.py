@@ -1,7 +1,7 @@
 import equinox as eqx
 import jax
 import jax.numpy as jnp
-from jaxtyping import Array, PRNGKeyArray
+from jaxtyping import Array, ArrayLike, PRNGKeyArray
 from typing import Optional, Callable
 from dataclasses import dataclass, field
 
@@ -195,7 +195,7 @@ class TransformerEncoder(eqx.Module):
         key, subkey = jax.random.split(key)
         x = embedding
         if layer_result: 
-            layer_results = []
+            layer_results: list[Array] = []
             for block in self.attention_blocks:
                 key, subkey = jax.random.split(key)
                 x = block(subkey, x, mask)
