@@ -3,7 +3,7 @@ import jax
 import jax.numpy as jnp
 from jaxtyping import Array, PRNGKeyArray
 from typing import Callable, Tuple
-from kazeML.jax.common.modules.updown_sampling import UpDownSampling
+from kazeML.jax.common.modules.Updown_sampling import UpDownSampling
 
 
 class ResnetBlock(eqx.Module):
