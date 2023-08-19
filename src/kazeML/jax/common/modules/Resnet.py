@@ -3,6 +3,7 @@ import jax
 import jax.numpy as jnp
 from jaxtyping import Array, PRNGKeyArray
 from typing import Callable, Tuple
+from kazeML.jax.common.modules.updown_sampling import UpDownSampling
 
 
 class ResnetBlock(eqx.Module):
@@ -15,6 +16,7 @@ class ResnetBlock(eqx.Module):
     group_norm_out: eqx.nn.GroupNorm
     conditional: eqx.nn.Linear | None
     skip_rescale: bool
+    sampling: Callable
 
     def __init__(
         self,
@@ -31,8 +33,10 @@ class ResnetBlock(eqx.Module):
         group_norm_size: int = 32,
         activation: Callable = jax.nn.swish,
         skip_rescale: bool = True,
+        sampling: str = "same",  # 'same', 'up', 'down'
+        sampling_method: str = "naive",  # 'naive', 'fir', 'conv'
         fir: bool = False,
-        fir_kernel: Tuple[int] = (1, 3, 3, 1),
+        fir_kernel_size: int = 3,
     ):
         self._n_dim = num_dim
         subkey = jax.random.split(key, 4)
@@ -83,6 +87,24 @@ class ResnetBlock(eqx.Module):
         )
         self.act = eqx.nn.Lambda(activation)
         self.skip_rescale = skip_rescale
+        if sampling == "same":
+            self.sampling = lambda x: x
+        elif sampling == "up":
+            self.sampling = UpDownSampling(
+                num_dim=num_dim,
+                up=True,
+                factor=2,
+                mode=sampling_method,
+                fir_kernel_size=fir_kernel_size,
+            )
+        elif sampling == "down":
+            self.sampling = UpDownSampling(
+                num_dim=num_dim,
+                up=False,
+                factor=2,
+                mode=sampling_method,
+                fir_kernel_size=fir_kernel_size,
+            )
 
     def __call__(
         self,
@@ -92,6 +114,10 @@ class ResnetBlock(eqx.Module):
         train: bool = True,
     ) -> Array:
         h = self.act(self.group_norm_in(x))
+
+        h = self.sampling(h)
+        x = self.sampling(x)
+
         h = self.conv_in_block(h)
         if self.conditional is not None and condition is not None:
             h += jnp.expand_dims(
