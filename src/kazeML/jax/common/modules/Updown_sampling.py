@@ -86,4 +86,4 @@ class UpDownSampling(eqx.Module):
                 )
 
     def __call__(self, x: Array) -> Array:
-        return self.filter(x, self.factor)
+        return self.filter(x)
