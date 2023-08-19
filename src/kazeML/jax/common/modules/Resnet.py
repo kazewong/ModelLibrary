@@ -18,6 +18,10 @@ class ResnetBlock(eqx.Module):
     skip_rescale: bool
     sampling: Callable
 
+    @property
+    def num_dim(self):
+        return self.conv_in_block.num_spatial_dims
+
     def __init__(
         self,
         key: PRNGKeyArray,
@@ -38,7 +42,6 @@ class ResnetBlock(eqx.Module):
         fir: bool = False,
         fir_kernel_size: int = 3,
     ):
-        self._n_dim = num_dim
         subkey = jax.random.split(key, 4)
         self.conv_in_block = eqx.nn.Conv(
             num_dim,
@@ -52,7 +55,7 @@ class ResnetBlock(eqx.Module):
         )
         self.conv_out_block = eqx.nn.Conv(
             num_dim,
-            num_in_channels,
+            num_out_channels,
             num_out_channels,
             kernel_size=kernel_size,
             key=subkey[1],
@@ -68,7 +71,7 @@ class ResnetBlock(eqx.Module):
             key=subkey[2],
             stride=stride,
             dilation=dilation,
-            padding=padding,
+            padding=0,
         )
 
         if conditional_size > 0:
@@ -80,10 +83,10 @@ class ResnetBlock(eqx.Module):
 
         self.dropout = eqx.nn.Dropout(dropout)
         self.group_norm_in = eqx.nn.GroupNorm(
-            min(group_norm_size, num_out_channels), num_out_channels
+            min(group_norm_size, num_in_channels), num_in_channels
         )
         self.group_norm_out = eqx.nn.GroupNorm(
-            min(group_norm_size, num_in_channels), num_in_channels
+            min(group_norm_size, num_out_channels), num_out_channels
         )
         self.act = eqx.nn.Lambda(activation)
         self.skip_rescale = skip_rescale
@@ -113,24 +116,24 @@ class ResnetBlock(eqx.Module):
         condition: Array | None = None,
         train: bool = True,
     ) -> Array:
-        h = self.act(self.group_norm_in(x))
+        x_res = self.act(self.group_norm_in(x))
 
-        h = self.sampling(h)
+        x_res = self.sampling(x_res)
         x = self.sampling(x)
 
-        h = self.conv_in_block(h)
+        x_res = self.conv_in_block(x_res)
         if self.conditional is not None and condition is not None:
-            h += jnp.expand_dims(
+            x_res += jnp.expand_dims(
                 self.conditional(self.act(condition)),
-                axis=tuple(range(1, self._n_dim + 1)),
+                axis=tuple(range(1, self.num_dim + 1)),
             )
-        h = self.act(self.group_norm_out(h))
+        x_res = self.act(self.group_norm_out(x_res))
         key, subkey = jax.random.split(key)
-        h = self.dropout(h, key=subkey, inference=not train)
-        h = self.conv_out_block(h)
+        x_res = self.dropout(x_res, key=subkey, inference=not train)
+        x_res = self.conv_out_block(x_res)
         x = self.conv_residual_block(x)
 
         if not self.skip_rescale:
-            return x + h
+            return x + x_res
         else:
-            return (x + h) / jnp.sqrt(2)
+            return (x + x_res) / jnp.sqrt(2)
