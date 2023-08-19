@@ -39,9 +39,6 @@ class Data2VecTrainer(Tap):
     num_workers: int = 8
     train_test_ratio: float = 0.8
 
-
-
-
 class Data2VecTrainer:
 
     def __init__(self,
