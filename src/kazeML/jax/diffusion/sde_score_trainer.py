@@ -110,8 +110,8 @@ class SDEDiffusionTrainer:
         transform.append(
             lambda x: x[
                 :,
-                x.shape[1] // 2 - 64 : x.shape[1] // 2 + 64,
-                x.shape[2] // 2 - 64 : x.shape[2] // 2 + 64,
+                x.shape[1] // 2 - 128 : x.shape[1] // 2 + 128,
+                x.shape[2] // 2 - 128 : x.shape[2] // 2 + 128,
             ]
         )
 

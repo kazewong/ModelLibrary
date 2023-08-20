@@ -184,6 +184,8 @@ class ScoreBasedSDE(eqx.Module):
         model = eqx.tree_inference(self, value=True)
         self.predictor.score = eqx.Partial(model.score, key= jax.random.PRNGKey(0))
         self.corrector.score = eqx.Partial(model.score, key= jax.random.PRNGKey(0))
+        predictor = jax.jit(self.predictor)
+        corrector = jax.jit(self.corrector)
         key, subkey = jax.random.split(key)
         x_init = self.sde.sample_prior(subkey, data_shape)
         time_steps = jnp.linspace(self.sde.T, eps, n_steps)
@@ -193,9 +195,9 @@ class ScoreBasedSDE(eqx.Module):
 
         for time_step in tqdm(time_steps):
             key, subkey = jax.random.split(key)
-            x, x_mean = self.predictor(subkey, x, time_step, step_size)
+            x, x_mean = predictor(subkey, x, time_step, step_size)
             key, subkey = jax.random.split(key)
-            x, x_mean = self.corrector(subkey, x, time_step, step_size)
+            x, x_mean = corrector(subkey, x, time_step, step_size)
         return key, x, x_mean
 
     def inpaint(
@@ -209,6 +211,8 @@ class ScoreBasedSDE(eqx.Module):
         model = eqx.tree_inference(self, value=True)
         self.predictor.score = eqx.Partial(model.score, key= jax.random.PRNGKey(0))
         self.corrector.score = eqx.Partial(model.score, key= jax.random.PRNGKey(0))
+        predictor = jax.jit(self.predictor)
+        corrector = jax.jit(self.corrector)
         key, subkey = jax.random.split(key)
         x_init = self.sde.sample_prior(subkey, data.shape) * (1.0 - mask)
         time_steps = jnp.linspace(self.sde.T, eps, n_steps)
@@ -218,7 +222,7 @@ class ScoreBasedSDE(eqx.Module):
 
         for time_step in tqdm(time_steps):
             key, subkey = jax.random.split(key)
-            x, x_mean = self.predictor(subkey, x, time_step, step_size)
+            x, x_mean = predictor(subkey, x, time_step, step_size)
 
             key, subkey = jax.random.split(key)
             masked_data_mean, std = self.sde.marginal_prob(data, time_step)
@@ -227,7 +231,7 @@ class ScoreBasedSDE(eqx.Module):
             x_mean = x_mean * (1.0 - mask) + masked_data_mean * mask
 
             key, subkey = jax.random.split(key)
-            x, x_mean = self.corrector(subkey, x, time_step, step_size)
+            x, x_mean = corrector(subkey, x, time_step, step_size)
 
             key, subkey = jax.random.split(key)
             mask_data = masked_data_mean + std * jax.random.normal(

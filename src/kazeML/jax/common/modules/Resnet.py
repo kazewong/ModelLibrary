@@ -81,13 +81,23 @@ class ResnetBlock(eqx.Module):
         else:
             self.conditional = None
 
-        self.dropout = eqx.nn.Dropout(dropout)
-        self.group_norm_in = eqx.nn.GroupNorm(
-            min(group_norm_size, num_in_channels), num_in_channels
-        )
-        self.group_norm_out = eqx.nn.GroupNorm(
-            min(group_norm_size, num_out_channels), num_out_channels
-        )
+
+        if group_norm_size>0:
+
+            self.group_norm_in = eqx.nn.GroupNorm(
+                min(group_norm_size, num_in_channels), num_in_channels
+            )
+            self.group_norm_out = eqx.nn.GroupNorm(
+                min(group_norm_size, num_out_channels), num_out_channels
+            )
+        else:
+            self.group_norm_in = eqx.nn.Lambda(lambda x: x)
+            self.group_norm_out = eqx.nn.Lambda(lambda x: x)
+
+        if dropout > 0:
+            self.dropout = eqx.nn.Dropout(dropout)
+        else:
+            self.dropout = lambda x, key, inference: x
         self.act = activation
         self.skip_rescale = skip_rescale
         if sampling == "same":
