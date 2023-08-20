@@ -97,7 +97,7 @@ class LangevinCorrector(Corrector):
         x_mean = x
         for i in range(self.n_steps):
             key, subkey = jax.random.split(key)
-            grad = self.score(x, t.reshape(1), subkey)
+            grad = self.score(x, t.reshape(1))
             key, subkey = jax.random.split(key)
             noise = jax.random.normal(subkey, x.shape)
             grad_norm = jnp.linalg.norm(grad)
