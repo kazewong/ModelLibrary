@@ -6,11 +6,6 @@ import jax.numpy as jnp
 import optax
 import equinox as eqx
 import numpy as np
-from jax._src.distributed import initialize
-from jax.experimental.multihost_utils import process_allgather
-from torch.utils.data import DataLoader, random_split
-from torch.utils.data.distributed import DistributedSampler
-from clearml import Task, Logger
 from kazeML.jax.common.Unet import Unet, UnetConfig
 from kazeML.jax.diffusion.sde import VESDE
 from kazeML.jax.diffusion.sde_score import (
@@ -22,6 +17,7 @@ from kazeML.jax.diffusion.diffusion_dataset import DiffusionDataset
 from kazeML.jax.diffusion.sde_score_trainer import SDEDiffusionModelParser
 import numpy as np
 import json
+import h5py
 
 
 class SDEDiffusionPipelineParser(Tap):
@@ -113,3 +109,10 @@ if __name__ == "__main__":
     args = SDEDiffusionPipelineParser().parse_args()
     pipeline = SDEDiffusionPipeline(args)
     model = pipeline.model
+    size = 128
+    data = h5py.File("/mnt/home/wwong/ceph/Dataset/ThereIsASky/galaxyzoo/images_gz2.hdf5")
+    image_masked = (data['data'][2][:,212-size//2:212+size//2,212-size//2:212+size//2] / 255).astype(np.float32) - 0.5
+    mask = np.ones((3, size, size), dtype=np.float32)
+    mask_size = 32
+    mask[:, size//2-mask_size//2:size//2+mask_size//2, size//2-mask_size//2:size//2+mask_size//2] = 0
+    inpainted = pipeline.inpaint(jax.random.PRNGKey(0), image_masked, mask, 500)

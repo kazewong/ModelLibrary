@@ -110,8 +110,8 @@ class SDEDiffusionTrainer:
         transform.append(
             lambda x: x[
                 :,
-                x.shape[1] // 2 - 128 : x.shape[1] // 2 + 128,
-                x.shape[2] // 2 - 128 : x.shape[2] // 2 + 128,
+                x.shape[1] // 2 - 64 : x.shape[1] // 2 + 64,
+                x.shape[2] // 2 - 64 : x.shape[2] // 2 + 64,
             ]
         )
 
@@ -378,7 +378,8 @@ if __name__ == "__main__":
 
     if args.distributed == True:
         initialize()
-        print(jax.process_count())
+        print("Total number of process: " + str(jax.process_count()))
+
 
     n_processes = jax.process_count()
     if jax.process_index() == 0:

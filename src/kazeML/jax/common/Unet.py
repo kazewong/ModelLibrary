@@ -38,11 +38,10 @@ class Unet(eqx.Module):
     DownBlocks: list[ResnetBlock]
     UpBlocks: list[ResnetBlock]
     BottleNeck: list[ResnetBlock]
-    config: UnetConfig
 
     @property
     def n_dim(self) -> int:
-        return self.config.num_dim
+        return self.input_conv.num_spatial_dims
 
     def __init__(
         self,
@@ -54,7 +53,6 @@ class Unet(eqx.Module):
         self.DownBlocks = []
         self.UpBlocks = []
         self.BottleNeck = []
-        self.config = config
 
         ResBlock = partial(
             ResnetBlock,
