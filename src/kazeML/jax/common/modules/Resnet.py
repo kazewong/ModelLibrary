@@ -88,7 +88,7 @@ class ResnetBlock(eqx.Module):
         self.group_norm_out = eqx.nn.GroupNorm(
             min(group_norm_size, num_out_channels), num_out_channels
         )
-        self.act = eqx.nn.Lambda(activation)
+        self.act = activation
         self.skip_rescale = skip_rescale
         if sampling == "same":
             self.sampling = lambda x: x
