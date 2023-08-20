@@ -211,8 +211,8 @@ class ScoreBasedSDE(eqx.Module):
         model = eqx.tree_inference(self, value=True)
         self.predictor.score = eqx.Partial(model.score, key=jax.random.PRNGKey(0))
         self.corrector.score = eqx.Partial(model.score, key=jax.random.PRNGKey(0))
-        # predictor = jax.jit(self.predictor)
-        # corrector = jax.jit(self.corrector)
+        predictor = self.predictor
+        corrector = self.corrector
         key, subkey = jax.random.split(key)
         x_init = self.sde.sample_prior(subkey, data.shape) * (1.0 - mask)
         time_steps = jnp.linspace(self.sde.T, eps, n_steps)
