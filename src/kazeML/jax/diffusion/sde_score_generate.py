@@ -113,6 +113,6 @@ if __name__ == "__main__":
     data = h5py.File("/mnt/home/wwong/ceph/Dataset/ThereIsASky/galaxyzoo/images_gz2.hdf5")
     image_masked = (data['data'][2][:,212-size//2:212+size//2,212-size//2:212+size//2] / 255).astype(np.float32) - 0.5
     mask = np.ones((3, size, size), dtype=np.float32)
-    mask_size = 32
+    mask_size = 16
     mask[:, size//2-mask_size//2:size//2+mask_size//2, size//2-mask_size//2:size//2+mask_size//2] = 0
     inpainted = pipeline.inpaint(jax.random.PRNGKey(0), image_masked, mask, 500)

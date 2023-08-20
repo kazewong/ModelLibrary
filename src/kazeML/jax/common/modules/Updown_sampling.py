@@ -85,5 +85,5 @@ class UpDownSampling(eqx.Module):
                     gain=fir_gain,
                 )
 
-    def __call__(self, x: Array) -> Array:
+    def __call__(self, x: Array, *, key: PRNGKeyArray|None = None) -> Array:
         return self.filter(x)

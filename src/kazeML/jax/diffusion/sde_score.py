@@ -223,7 +223,7 @@ class ScoreBasedSDE(eqx.Module):
         @jax.jit
         def step(x, x_mean, key, time_step):
             key, subkey = jax.random.split(key)
-            x, x_mean = predictor(key, x, time_step, step_size)
+            x, x_mean = predictor(subkey, x, time_step, step_size)
 
             key, subkey = jax.random.split(key)
             masked_data_mean, std = self.sde.marginal_prob(data, time_step)
