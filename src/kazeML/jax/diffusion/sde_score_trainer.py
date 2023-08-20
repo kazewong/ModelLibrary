@@ -62,7 +62,7 @@ class SDEDiffusionModelParser(Tap):
     N: int = 300
 
     # UNet hyperparameters
-    embedding_dim: int
+    embedding_dim: int = 128
     base_channels: int = 4
     n_resolution: int = 4
     n_resnet_blocks: int = 2
