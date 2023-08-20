@@ -35,7 +35,7 @@ class ResnetBlock(eqx.Module):
         dilation: int = 1,
         padding: int = 1,
         group_norm_size: int = 32,
-        activation: Callable = jax.nn.swish,
+        activation: eqx.nn.Lambda = eqx.nn.Lambda(jax.nn.swish),
         skip_rescale: bool = True,
         sampling: str = "same",  # 'same', 'up', 'down'
         sampling_method: str = "naive",  # 'naive', 'fir', 'conv'

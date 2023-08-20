@@ -72,7 +72,7 @@ class SDEDiffusionModelParser(Tap):
     group_norm_size: int = 32
     dropout: float = 0.1
     padding: int = 1
-    activation: Callable = jax.nn.swish
+    activation: eqx.nn.Lambda = eqx.nn.Lambda(jax.nn.swish)
     skip_rescale: bool = True
     sampling_method: str = "naive"
     fir: bool = False
@@ -83,7 +83,6 @@ class SDEDiffusionModelParser(Tap):
 
 class BigParser(SDEDiffusionExperimentParser, SDEDiffusionModelParser):
     pass
-
 
 class SDEDiffusionTrainer:
     def __init__(self, config: BigParser, logging: bool = False):
