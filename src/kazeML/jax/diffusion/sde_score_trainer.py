@@ -72,7 +72,7 @@ class SDEDiffusionModelParser(Tap):
     group_norm_size: int = 32
     dropout: float = 0.1
     padding: int = 1
-    activation: eqx.nn.Lambda = eqx.nn.Lambda(jax.nn.swish)
+    activation: "str" = "swish"
     skip_rescale: bool = True
     sampling_method: str = "naive"
     fir: bool = False
@@ -152,6 +152,13 @@ class SDEDiffusionTrainer:
 
         self.key, subkey = jax.random.split(jax.random.PRNGKey(config.seed))
 
+        if config.activation == "swish":
+            activation = jax.nn.swish
+        elif config.activation == "relu":
+            activation = jax.nn.relu
+        else:
+            raise NotImplementedError
+
         unet_config = UnetConfig(
             num_dim=len(self.data_shape[1:]),
             input_channels=self.data_shape[0],
@@ -166,14 +173,13 @@ class SDEDiffusionTrainer:
             group_norm_size=config.group_norm_size,
             dropout=config.dropout,
             padding=config.padding,
-            activation=config.activation,
             skip_rescale=config.skip_rescale,
             sampling_method=config.sampling_method,
             fir=config.fir,
             fir_kernel_size=config.fir_kernel_size,
         )
 
-        unet = Unet(subkey, unet_config)
+        unet = Unet(subkey, unet_config, activation=activation)
         self.key, subkey = jax.random.split(self.key)
         time_embed = eqx.nn.Linear(
             config.time_feature, config.embedding_dim, key=subkey
