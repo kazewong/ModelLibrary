@@ -182,8 +182,8 @@ class ScoreBasedSDE(eqx.Module):
         eps: float = 1e-5,
     ) -> tuple[Array, Array, PRNGKeyArray]:
         model = eqx.tree_inference(self, value=True)
-        self.predictor.score = eqx.Partial(model.score, key= jax.random.PRNGKey(0))
-        self.corrector.score = eqx.Partial(model.score, key= jax.random.PRNGKey(0))
+        self.predictor.score = eqx.Partial(model.score, key=jax.random.PRNGKey(0))
+        self.corrector.score = eqx.Partial(model.score, key=jax.random.PRNGKey(0))
         predictor = jax.jit(self.predictor)
         corrector = jax.jit(self.corrector)
         key, subkey = jax.random.split(key)
@@ -209,8 +209,8 @@ class ScoreBasedSDE(eqx.Module):
         eps: float = 1e-3,
     ):
         model = eqx.tree_inference(self, value=True)
-        self.predictor.score = eqx.Partial(model.score, key= jax.random.PRNGKey(0))
-        self.corrector.score = eqx.Partial(model.score, key= jax.random.PRNGKey(0))
+        self.predictor.score = eqx.Partial(model.score, key=jax.random.PRNGKey(0))
+        self.corrector.score = eqx.Partial(model.score, key=jax.random.PRNGKey(0))
         predictor = jax.jit(self.predictor)
         corrector = jax.jit(self.corrector)
         key, subkey = jax.random.split(key)
@@ -220,9 +220,10 @@ class ScoreBasedSDE(eqx.Module):
         x = x_init
         x_mean = x_init
 
-        for time_step in tqdm(time_steps):
+        @jax.jit
+        def step(x, x_mean, key, time_step):
             key, subkey = jax.random.split(key)
-            x, x_mean = predictor(subkey, x, time_step, step_size)
+            x, x_mean = predictor(key, x, time_step, step_size)
 
             key, subkey = jax.random.split(key)
             masked_data_mean, std = self.sde.marginal_prob(data, time_step)
@@ -239,6 +240,12 @@ class ScoreBasedSDE(eqx.Module):
             )  # Not sure if resampling is necessary
             x = x * (1.0 - mask) + mask_data * mask
             x_mean = x_mean * (1.0 - mask) + masked_data_mean * mask
+            return x, x_mean
+
+        for time_step in tqdm(time_steps):
+            key, subkey = jax.random.split(key)
+            x, x_mean = step(x, x_mean, subkey, time_step)
+
         return x, x_mean
 
     def conditional_sample(
@@ -263,8 +270,8 @@ class ScoreBasedSDE(eqx.Module):
         """
         model = eqx.tree_inference(self, value=True)
         conditional_function = eqx.Partial(conditional_function, y=condtional_data)
-        self.predictor.score = eqx.Partial(model.score, key= jax.random.PRNGKey(0))
-        self.corrector.score = eqx.Partial(model.score, key= jax.random.PRNGKey(0))
+        self.predictor.score = eqx.Partial(model.score, key=jax.random.PRNGKey(0))
+        self.corrector.score = eqx.Partial(model.score, key=jax.random.PRNGKey(0))
         key, subkey = jax.random.split(key)
         x_init = self.sde.sample_prior(subkey, data_shape)
         time_steps = jnp.linspace(self.sde.T, eps, n_steps)

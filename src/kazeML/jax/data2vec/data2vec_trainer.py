@@ -15,7 +15,7 @@ from kazeML.jax.data2vec.data2vec_dataset import Data2VecDataset
 from kazeML.jax.common.Transformer import TransformerConfig
 
 
-class Data2VecTrainer(Tap):
+class Data2VecTrainerParser(Tap):
     # Metadata about the experiment
     data_path: str
     experiment_name: str
@@ -42,7 +42,7 @@ class Data2VecTrainer(Tap):
 
 
 class Data2VecTrainer:
-    def __init__(self, config: Data2VecTrainer, logging: bool = False):
+    def __init__(self, config: Data2VecTrainerParser, logging: bool = False):
         self.config = config
         self.logging = logging
         if logging and (jax.process_index() == 0):
