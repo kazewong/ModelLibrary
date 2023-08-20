@@ -31,6 +31,8 @@ class UnetConfig:
 
 
 class Unet(eqx.Module):
+
+    # TODO: add pyramid sampling
     input_conv: eqx.nn.Conv
     output_conv: eqx.nn.Conv
     DownBlocks: list[ResnetBlock]
