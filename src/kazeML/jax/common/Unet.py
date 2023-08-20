@@ -8,6 +8,7 @@ from typing import Callable
 from kazeML.jax.common.modules.Updown_sampling import UpDownSampling
 from kazeML.jax.common.modules.Resnet import ResnetBlock
 
+
 @dataclass
 class UnetConfig:
     num_dim: int
@@ -143,14 +144,16 @@ class Unet(eqx.Module):
     ) -> Array:
         key, subkey = jax.random.split(key)
         x = self.input_conv(x)
+        x_res = []
         for block in self.DownBlocks:
             key, subkey = jax.random.split(key)
             x = block(x, subkey, t, train=train)
+            x_res.append(x)
         for block in self.BottleNeck:
             key, subkey = jax.random.split(key)
             x = block(x, subkey, t, train=train)
         for block in self.UpBlocks:
             key, subkey = jax.random.split(key)
-            x = block(x, subkey, t, train=train)
+            x = block(x+x_res.pop(), subkey, t, train=train)
         x = self.output_conv(x)
         return x
