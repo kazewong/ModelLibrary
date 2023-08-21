@@ -36,12 +36,8 @@ class Unet(eqx.Module):
     input_conv: eqx.nn.Conv
     output_conv: eqx.nn.Conv
     DownBlocks: list[ResnetBlock]
-    PyramidDownBlocks: list[eqx.nn.Sequential]
     UpBlocks: list[ResnetBlock]
-    PyramidUpBlocks: list[eqx.nn.Sequential]
     BottleNeck: list[ResnetBlock]
-    n_resolution: int
-    n_resnet_blocks: int
 
     @property
     def n_dim(self) -> int:
@@ -57,10 +53,6 @@ class Unet(eqx.Module):
         self.DownBlocks = []
         self.UpBlocks = []
         self.BottleNeck = []
-        self.PyramidDownBlocks = []
-        self.PyramidUpBlocks = []
-        self.n_resolution = config.n_resolution
-        self.n_resnet_blocks = config.n_resnet_blocks
 
         ResBlock = partial(
             ResnetBlock,
@@ -110,26 +102,21 @@ class Unet(eqx.Module):
                 self.DownBlocks.append(
                     ResBlock(
                         key=subkey,
-                        num_in_channels=config.base_channels * 2**i_level,
+                        num_in_channels=config.base_channels * 2 ** i_level,
                         num_out_channels=config.base_channels * 2 ** (i_level + 1),
                         sampling="down",
                     )
                 )
-                key, subkey = jax.random.split(key)
-                self.PyramidDownBlocks.append(
-                    eqx.nn.Sequential([eqx.nn.Conv(
-                            config.num_dim,
-                            in_channels=config.base_channels * 2 ** (i_level),
-                            out_channels=config.base_channels * 2 ** (i_level + 1),
-                            kernel_size=1,
-                            key=subkey,
-                    ),
+                self.DownBlocks.append(
                     UpDownSampling(
-                        config.num_dim,
-                        up=False,
-                        mode=config.sampling_method,
-                        fir_kernel_size=config.fir_kernel_size,
-                    )]))
+                    num_dim=config.num_dim,
+                    up=False,
+                    factor=2,
+                    mode=config.sampling_method,
+                    fir_kernel_size=config.fir_kernel_size,
+                )
+                )
+
 
         for i_block in range(config.n_resnet_blocks):
             key, subkey = jax.random.split(key)
@@ -143,7 +130,7 @@ class Unet(eqx.Module):
                 )
             )
 
-        for i_level in reversed(range(config.n_resolution)):
+        for i_level in range(config.n_resolution):
             for i_block in range(config.n_resnet_blocks):
                 key, subkey = jax.random.split(key)
                 self.UpBlocks.append(
@@ -153,31 +140,30 @@ class Unet(eqx.Module):
                         num_out_channels=config.base_channels * 2**i_level,
                     )
                 )
-            if i_level != 0:
+            if i_level != config.n_resolution - 1:
                 key, subkey = jax.random.split(key)
                 self.UpBlocks.append(
                     ResBlock(
                         key=subkey,
-                        num_in_channels=config.base_channels * 2**i_level,
-                        num_out_channels=config.base_channels * 2 ** (i_level - 1),
+                        num_in_channels=config.base_channels * 2 ** (i_level + 1),
+                        num_out_channels=config.base_channels * 2 ** (i_level),
                         sampling="up",
                     )
                 )
-                key, subkey = jax.random.split(key)
-                self.PyramidUpBlocks.append(
-                    eqx.nn.Sequential([eqx.nn.Conv(
-                            config.num_dim,
-                            in_channels=config.base_channels * 2 ** (i_level),
-                            out_channels=config.base_channels * 2 ** (i_level - 1),
-                            kernel_size=1,
-                            key=subkey,
-                    ),
+                self.UpBlocks.append(
                     UpDownSampling(
-                        config.num_dim,
-                        up=True,
-                        mode=config.sampling_method,
-                        fir_kernel_size=config.fir_kernel_size,
-                    )]))
+                    num_dim=config.num_dim,
+                    up=True,
+                    factor=2,
+                    mode=config.sampling_method,
+                    fir_kernel_size=config.fir_kernel_size,
+                    )
+                )
+
+                
+        self.UpBlocks = list(reversed(self.UpBlocks))
+
+
 
     def __call__(
         self,
@@ -188,24 +174,32 @@ class Unet(eqx.Module):
     ) -> Array:
         key, subkey = jax.random.split(key)
         x = self.input_conv(x)
-        pyramid = x
         x_res = []
         for index, block in enumerate(self.DownBlocks):
             key, subkey = jax.random.split(key)
-            x = block(x, subkey, t, train=train)
-            if index % (self.n_resnet_blocks+1) == self.n_resnet_blocks:
-                pyramid = self.PyramidDownBlocks[index//(self.n_resnet_blocks+1)](pyramid)
-                x = x + pyramid
-            x_res.append(x)
+            if type(block) == ResnetBlock:
+                x = block(x, subkey, t, train=train)
+                x_res.append(x)
+            else:
+                x = block(x)
         for block in self.BottleNeck:
             key, subkey = jax.random.split(key)
             x = block(x, subkey, t, train=train)
-        pyramid = x
-        for index, block in enumerate(self.UpBlocks):
+        for block in self.UpBlocks:
             key, subkey = jax.random.split(key)
-            x = block(x+x_res.pop(), subkey, t, train=train)
-            if index % (self.n_resnet_blocks+1) == self.n_resnet_blocks:
-                pyramid = self.PyramidUpBlocks[index//(self.n_resnet_blocks+1)](pyramid) + x
-                x = pyramid
+            if type(block) == ResnetBlock:
+                x = block(x+x_res.pop(), subkey, t, train=train)
+            else:
+                x = block(x)
         x = self.output_conv(x)
         return x
+
+# for x,y in zip(down,reversed(up)):
+#     if type(x)==ResnetBlock and type(y)==ResnetBlock:
+#         print(x.conv_out_block.out_channels,y.conv_out_block.out_channels)
+#     elif type(x)==ResnetBlock:
+#         print(x.conv_out_block.out_channels)
+#     elif type(y)==ResnetBlock:
+#         print("   " + str(y.conv_out_block.out_channels))
+#     else:
+#         print(type(x),type(y))

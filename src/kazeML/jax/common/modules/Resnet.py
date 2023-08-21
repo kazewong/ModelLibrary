@@ -3,7 +3,7 @@ import jax
 import jax.numpy as jnp
 from jaxtyping import Array, PRNGKeyArray
 from typing import Callable, Tuple
-from kazeML.jax.common.modules.Updown_sampling import UpDownSampling
+from kazeML.jax.common.modules.Updown_sampling import UpDownSampling, naive_upsample, naive_downsample
 
 
 class ResnetBlock(eqx.Module):
@@ -103,21 +103,23 @@ class ResnetBlock(eqx.Module):
         if sampling == "same":
             self.sampling = lambda x: x
         elif sampling == "up":
-            self.sampling = UpDownSampling(
-                num_dim=num_dim,
-                up=True,
-                factor=2,
-                mode=sampling_method,
-                fir_kernel_size=fir_kernel_size,
-            )
+            self.sampling = lambda x: naive_upsample(x, n_dim=num_dim, factor=2)
+            #  UpDownSampling(
+            #     num_dim=num_dim,
+            #     up=True,
+            #     factor=2,
+            #     mode=sampling_method,
+            #     fir_kernel_size=fir_kernel_size,
+            # )
         elif sampling == "down":
-            self.sampling = UpDownSampling(
-                num_dim=num_dim,
-                up=False,
-                factor=2,
-                mode=sampling_method,
-                fir_kernel_size=fir_kernel_size,
-            )
+            self.sampling = lambda x: naive_downsample(x, n_dim=num_dim, factor=2)
+            # self.sampling = UpDownSampling(
+            #     num_dim=num_dim,
+            #     up=False,
+            #     factor=2,
+            #     mode=sampling_method,
+            #     fir_kernel_size=fir_kernel_size,
+            # )
 
     def __call__(
         self,
@@ -128,8 +130,8 @@ class ResnetBlock(eqx.Module):
     ) -> Array:
         x_res = self.act(self.group_norm_in(x))
 
-        x_res = self.sampling(x_res)
-        x = self.sampling(x)
+        # x_res = self.sampling(x_res)
+        # x = self.sampling(x)
 
         x_res = self.conv_in_block(x_res)
         if self.conditional is not None and condition is not None:
