@@ -1,7 +1,6 @@
 from torch.utils.data import Dataset
 import h5py
 
-
 class Data2VecDataset(Dataset):
     def __init__(self, path: str, transform=None):
         h5_file = h5py.File(path, "r")

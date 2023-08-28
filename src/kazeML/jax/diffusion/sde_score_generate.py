@@ -18,6 +18,7 @@ from kazeML.jax.diffusion.sde_score_trainer import SDEDiffusionModelParser
 import numpy as np
 import json
 import h5py
+import matplotlib.pyplot as plt
 
 
 class SDEDiffusionPipelineParser(Tap):
@@ -109,10 +110,14 @@ if __name__ == "__main__":
     args = SDEDiffusionPipelineParser().parse_args()
     pipeline = SDEDiffusionPipeline(args)
     model = pipeline.model
-    size = 128
+    size = 256
     data = h5py.File("/mnt/home/wwong/ceph/Dataset/ThereIsASky/galaxyzoo/images_gz2.hdf5")
-    image_masked = (data['data'][2][:,212-size//2:212+size//2,212-size//2:212+size//2] / 255).astype(np.float32) - 0.5
+    image_masked = (data['data'][100][:,212-size//2:212+size//2,212-size//2:212+size//2]/ 255).astype(np.float32) - 0.5
     mask = np.ones((3, size, size), dtype=np.float32)
-    mask_size = 16
+    mask_size = 64
     mask[:, size//2-mask_size//2:size//2+mask_size//2, size//2-mask_size//2:size//2+mask_size//2] = 0
-    inpainted = pipeline.inpaint(jax.random.PRNGKey(0), image_masked, mask, 500)
+    # mask[:, 3*size//4-mask_size//2:3*size//4+mask_size//2, size//4-mask_size//2:size//4+mask_size//2] = 0
+    # mask[:, size//4-mask_size//2:size//4+mask_size//2, 3*size//4-mask_size//2:3*size//4+mask_size//2] = 0
+    inpainted = pipeline.inpaint(jax.random.PRNGKey(0), image_masked, mask, 2000)
+    plt.imshow(inpainted[1].T+0.5)
+    plt.savefig("test.png")

@@ -35,7 +35,8 @@ class SDEDiffusionExperimentParser(Tap):
     conditional: bool = False
 
     # Dataset hyperparameters
-    normalize: bool = True
+    normalize: bool = False
+    window_size: int = 128
 
     # Training hyperparameters
     n_epochs: int = 100
@@ -44,6 +45,7 @@ class SDEDiffusionExperimentParser(Tap):
     seed: int = 2019612721831
     num_workers: int = 8
     train_test_ratio: float = 0.8
+    prefetch_factor: int = 2
 
     # Logging hyperparameters
     log_epoch: int = 2
@@ -64,6 +66,8 @@ class SDEDiffusionModelParser(Tap):
     # UNet hyperparameters
     embedding_dim: int = 128
     base_channels: int = 4
+    max_channels: int = 512
+    up_down_factor: int = 2
     n_resolution: int = 4
     n_resnet_blocks: int = 2
     kernel_size: int = 3
@@ -104,18 +108,20 @@ class SDEDiffusionTrainer:
         )
 
         transform = []
-        if config.normalize:
-            transform.append(lambda x: (x / 255.0) - 0.5)
+        
 
-        transform.append(
-            lambda x: x[
-                :,
-                x.shape[1] // 2 - 64 : x.shape[1] // 2 + 64,
-                x.shape[2] // 2 - 64 : x.shape[2] // 2 + 64,
-            ]
-        )
+        # transform.append(
+        #     lambda x: x[
+        #         :,
+        #         x.shape[1] // 2 - config.window_size // 2 : x.shape[1] // 2 + config.window_size // 2,
+        #         x.shape[2] // 2 - config.window_size // 2 : x.shape[2] // 2 + config.window_size // 2,
+        #     ]
+        # )
 
         dataset = DiffusionDataset(self.config.data_path, transform=transform)
+        if config.normalize:
+            dataset.add_normalize()
+
         train_set, test_set = random_split(
             dataset, [config.train_test_ratio, 1 - config.train_test_ratio]
         )
@@ -138,14 +144,14 @@ class SDEDiffusionTrainer:
             batch_size=config.batch_size,
             num_workers=config.num_workers,
             sampler=train_sampler,
-            pin_memory=True,
+            prefetch_factor=config.prefetch_factor,
         )
         self.test_loader = DataLoader(
             test_set,
             batch_size=config.batch_size,
             num_workers=config.num_workers,
             sampler=test_sampler,
-            pin_memory=True,
+            prefetch_factor=config.prefetch_factor,
         )
 
         self.data_shape = train_set.dataset.get_shape()

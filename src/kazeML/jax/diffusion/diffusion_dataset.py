@@ -12,6 +12,8 @@ class DiffusionDataset(Dataset):
             self.transform = transform
 
             self.data: h5py.Dataset = h5_file['data'] # type: ignore
+            self.scale: float = h5_file.attrs['scale']
+            self.std: float = h5_file.attrs['std']
 
             assert isinstance(self.data, h5py.Dataset), "Data is not a dataset" 
 
@@ -42,3 +44,6 @@ class DiffusionDataset(Dataset):
 
         def get_shape(self):
             return self[0].shape
+
+        def add_normalize(self):
+            self.transform.append(lambda x: ((x-self.scale)/self.std))

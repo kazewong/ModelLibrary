@@ -16,6 +16,8 @@ class UnetConfig:
     output_channels: int
     embedding_dim: int
     base_channels: int = 4
+    max_channels: int = 512
+    up_down_factor: int = 2
     n_resolution: int = 4
     n_resnet_blocks: int = 2
     kernel_size: int = 3
@@ -93,8 +95,8 @@ class Unet(eqx.Module):
                 self.DownBlocks.append(
                     ResBlock(
                         key=subkey,
-                        num_in_channels=config.base_channels * 2**i_level,
-                        num_out_channels=config.base_channels * 2**i_level,
+                        num_in_channels=min(config.base_channels * 2**i_level, config.max_channels),
+                        num_out_channels=min(config.base_channels * 2**i_level, config.max_channels),
                     )
                 )
             if i_level != config.n_resolution - 1:
@@ -102,8 +104,8 @@ class Unet(eqx.Module):
                 self.DownBlocks.append(
                     ResBlock(
                         key=subkey,
-                        num_in_channels=config.base_channels * 2 ** i_level,
-                        num_out_channels=config.base_channels * 2 ** (i_level + 1),
+                        num_in_channels=min(config.base_channels * 2**i_level, config.max_channels),
+                        num_out_channels=min(config.base_channels * 2 ** (i_level + 1), config.max_channels),
                         sampling="down",
                     )
                 )
@@ -111,7 +113,7 @@ class Unet(eqx.Module):
                     UpDownSampling(
                     num_dim=config.num_dim,
                     up=False,
-                    factor=2,
+                    factor=config.up_down_factor,
                     mode=config.sampling_method,
                     fir_kernel_size=config.fir_kernel_size,
                 )
@@ -123,10 +125,10 @@ class Unet(eqx.Module):
             self.BottleNeck.append(
                 ResBlock(
                     key=subkey,
-                    num_in_channels=config.base_channels
-                    * 2 ** (config.n_resolution - 1),
-                    num_out_channels=config.base_channels
-                    * 2 ** (config.n_resolution - 1),
+                    num_in_channels=min(config.base_channels
+                    * 2 ** (config.n_resolution - 1), config.max_channels),
+                    num_out_channels=min(config.base_channels
+                    * 2 ** (config.n_resolution - 1), config.max_channels),
                 )
             )
 
@@ -136,8 +138,8 @@ class Unet(eqx.Module):
                 self.UpBlocks.append(
                     ResBlock(
                         key=subkey,
-                        num_in_channels=config.base_channels * 2**i_level,
-                        num_out_channels=config.base_channels * 2**i_level,
+                        num_in_channels=min(config.base_channels * 2**i_level, config.max_channels),
+                        num_out_channels=min(config.base_channels * 2**i_level, config.max_channels),
                     )
                 )
             if i_level != config.n_resolution - 1:
@@ -145,8 +147,8 @@ class Unet(eqx.Module):
                 self.UpBlocks.append(
                     ResBlock(
                         key=subkey,
-                        num_in_channels=config.base_channels * 2 ** (i_level + 1),
-                        num_out_channels=config.base_channels * 2 ** (i_level),
+                        num_in_channels=min(config.base_channels * 2 ** (i_level + 1), config.max_channels),
+                        num_out_channels=min(config.base_channels * 2 ** (i_level), config.max_channels),
                         sampling="up",
                     )
                 )
@@ -154,7 +156,7 @@ class Unet(eqx.Module):
                     UpDownSampling(
                     num_dim=config.num_dim,
                     up=True,
-                    factor=2,
+                    factor=config.up_down_factor,
                     mode=config.sampling_method,
                     fir_kernel_size=config.fir_kernel_size,
                     )
@@ -193,13 +195,3 @@ class Unet(eqx.Module):
                 x = block(x)
         x = self.output_conv(x)
         return x
-
-# for x,y in zip(down,reversed(up)):
-#     if type(x)==ResnetBlock and type(y)==ResnetBlock:
-#         print(x.conv_out_block.out_channels,y.conv_out_block.out_channels)
-#     elif type(x)==ResnetBlock:
-#         print(x.conv_out_block.out_channels)
-#     elif type(y)==ResnetBlock:
-#         print("   " + str(y.conv_out_block.out_channels))
-#     else:
-#         print(type(x),type(y))
