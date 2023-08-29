@@ -64,8 +64,8 @@ class SeriesFeatureExtractor(FeatureExtractor):
                         eqx.nn.Dropout(p_dropout),
                         eqx.nn.GroupNorm(
                             1,
-                            layer_spec[i][0],
-                            affine=affine_group_norm,
+                            layer_spec[i+1][0],
+                            channelwise_affine=affine_group_norm,
                         ),
                         eqx.nn.Lambda(activation),
                     ]
@@ -76,11 +76,12 @@ class SeriesFeatureExtractor(FeatureExtractor):
         self.skip_connections = skip_connections
         self.residual_scale = residual_scale
 
-    def extract_features(self, data: Float[Array, "n_channel size"]) -> Array:
+    def extract_features(self, data: Float[Array, "n_channel size"], key: PRNGKeyArray = None) -> Array:
         residual = data
         for i in range(len(self.layer)):
-            data = self.layer[i](data)
-            if self.skip_connections:
+            key, subkey = jax.random.split(key)
+            data = self.layer[i](data, key = subkey)
+            if self.skip_connections and data.shape[1] == residual.shape[1]:
                 residual = residual[..., :: residual.shape[-1] // data.shape[-1]][
                     ..., : data.shape[-1]
                 ]
