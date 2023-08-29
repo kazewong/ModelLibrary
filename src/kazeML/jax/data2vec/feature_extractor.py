@@ -19,13 +19,6 @@ class FeatureExtractor(eqx.Module):
         """
         pass
 
-    @abstractmethod
-    def embed(
-        self,
-        data: Array,
-    ) -> Array:
-        pass
-
 
 class ImageFeatureExtractor(FeatureExtractor):
     def __init__(self):
