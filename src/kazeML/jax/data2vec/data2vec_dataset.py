@@ -2,6 +2,7 @@ from torch.utils.data import Dataset
 import torch
 import h5py
 from jaxtyping import Array, Float
+import numpy as np
 
 
 class Data2VecDataset(Dataset):
@@ -51,9 +52,8 @@ class Data2VecDataset(Dataset):
         return sample, mask
 
     def make_one_mask(self) -> torch.Tensor:
-        mask = torch.zeros((self.data_length))
-
         if self.n_dim == 1:
+            mask = torch.zeros((self.data_length), dtype=torch.int)
             num_mask = int(self.mask_fraction / self.mask_length + torch.rand(1))
             num_mask = max(num_mask, self.min_masks)
             mask_length = int(self.mask_length * self.data_length)
@@ -63,26 +63,32 @@ class Data2VecDataset(Dataset):
             for i in range(num_mask):
                 mask[center_indices[i]-mask_length//2:center_indices[i]+mask_length//2] = 1
         elif self.n_dim == 2:
-            num_mask = int(self.mask_fraction / self.mask_length**2 + torch.rand(1))
+            data_length = int(np.sqrt(self.data_length))
+            mask_length = int(np.sqrt(self.mask_length) * data_length)
+            mask = torch.zeros((data_length, data_length), dtype=torch.int)
+            num_mask = int(self.mask_fraction / self.mask_length + torch.rand(1))
             num_mask = max(num_mask, self.min_masks)
-            mask_length = int(self.mask_length * self.data_length)
             center_indices = torch.randint(
-                0, self.data_length - mask_length, (num_mask, 2)
+                mask_length//2, data_length - mask_length//2, (num_mask, 2)
             )
             for i in range(num_mask):
                 mask[center_indices[i, 0]-mask_length//2:center_indices[i, 0]+mask_length//2,
                      center_indices[i, 1]-mask_length//2:center_indices[i, 1]+mask_length//2] = 1
+            mask = mask.reshape(-1)
         elif self.n_dim == 3:
-            num_mask = int(self.mask_fraction / self.mask_length**3 + torch.rand(1))
+            data_length = int(np.cbrt(self.data_length))
+            mask_length = int(np.cbrt(self.mask_length) * data_length)
+            mask = torch.zeros((data_length, data_length, data_length), dtype=torch.int)
+            num_mask = int(self.mask_fraction / self.mask_length + torch.rand(1))
             num_mask = max(num_mask, self.min_masks)
-            mask_length = int(self.mask_length * self.data_length)
             center_indices = torch.randint(
-                0, self.data_length - mask_length, (num_mask, 3)
+                mask_length//2, data_length - mask_length//2, (num_mask, 3)
             )
             for i in range(num_mask):
                 mask[center_indices[i, 0]-mask_length//2:center_indices[i, 0]+mask_length//2,
                      center_indices[i, 1]-mask_length//2:center_indices[i, 1]+mask_length//2,
                      center_indices[i, 2]-mask_length//2:center_indices[i, 2]+mask_length//2] = 1
+            mask = mask.reshape(-1)
         else:
             print("Dimension not supported")
             raise NotImplementedError
