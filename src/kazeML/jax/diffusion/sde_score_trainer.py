@@ -384,7 +384,8 @@ if __name__ == "__main__":
 
     if args.distributed == True:
         initialize()
-        print("Total number of process: " + str(jax.process_count()))
+        if jax.process_index() == 0:
+            print("Total number of process: " + str(jax.process_count()))
 
 
     n_processes = jax.process_count()

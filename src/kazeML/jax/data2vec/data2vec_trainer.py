@@ -1,3 +1,5 @@
+import json
+import os
 from tap import Tap
 from jaxtyping import PyTree, Float, Array, PRNGKeyArray
 import jax
@@ -11,8 +13,10 @@ from torch.utils.data import DataLoader, random_split
 from torch.utils.data.distributed import DistributedSampler
 from clearml import Task, Logger
 import numpy as np
+from kazeML.jax.data2vec.data2vec import Data2Vec
 from kazeML.jax.data2vec.data2vec_dataset import Data2VecDataset
 from kazeML.jax.common.Transformer import TransformerConfig
+from kazeML.jax.data2vec.feature_extractor import SeriesFeatureExtractor
 
 
 class Data2VecTrainerParser(Tap):
@@ -22,14 +26,17 @@ class Data2VecTrainerParser(Tap):
     project_name: str = "Data2Vec"
     distributed: bool = False
 
-    # Transformer Config
-    transformer_config: TransformerConfig
+    # FeatureExtractor hyperparameters
+    FE_channels: list[int] = [1, 8, 16, 32]
+    FE_kernels: list[int] = [3, 3, 3, 3]
+    FE_strides: list[int] = [10, 5, 2, 2]
+    FE_dropout: float = 0.0
+    FE_affine_group_norm: bool = False
+    FE_log_compression: bool = False
+    FE_skip_connections: bool = False
+    FE_residual_scale: float = 1.0
 
-    # Model hyperparameters
-    time_feature: int = 128
-    autoencoder_embed_dim: int = 256
-    hidden_layer: list[int] = [3, 16, 32, 64, 128]
-    group_norm_size: int = 32
+    # Transformer hyperparameters
 
     # Training hyperparameters
     n_epochs: int = 500
@@ -39,6 +46,11 @@ class Data2VecTrainerParser(Tap):
     seed: int = 2019612721831
     num_workers: int = 8
     train_test_ratio: float = 0.8
+
+    # Logging hyperparameters
+    log_epoch: int = 2
+    log_t_step: int = 10
+    output_path: str = "./experiment"
 
 
 class Data2VecTrainer:
@@ -61,6 +73,24 @@ class Data2VecTrainer:
 
         # Initialize the dataset
         dataset = Data2VecDataset(config.data_path)
+
+        key = jax.random.PRNGKey(config.seed+3)
+        key, subkey = jax.random.split(key)
+        layer_spec = list(zip(config.FE_channels[:-1],config.FE_channels[1:], config.FE_kernels[:-1], config.FE_strides[:-1]))
+        if dataset.n_dim == 1:
+            feature_extractor = SeriesFeatureExtractor(
+                subkey,
+                layer_spec,
+                p_dropout=config.FE_dropout,
+                affine_group_norm=config.FE_affine_group_norm,
+                log_compression=config.FE_log_compression,
+                skip_connections=config.FE_skip_connections,
+                residual_scale=config.FE_residual_scale,
+            )
+        else:
+            raise NotImplementedError
+        self.model = Data2Vec(subkey)
+
         train_set, test_set = random_split(
             dataset, [config.train_test_ratio, 1 - config.train_test_ratio]
         )
@@ -69,14 +99,14 @@ class Data2VecTrainer:
             num_replicas=n_processes,
             rank=jax.process_index(),
             shuffle=True,
-            seed=config.seed,
+            seed=config.seed+1,
         )
         test_sampler = DistributedSampler(
             test_set,
             num_replicas=n_processes,
             rank=jax.process_index(),
             shuffle=False,
-            seed=config.seed,
+            seed=config.seed+2,
         )
         self.train_loader = DataLoader(
             train_set,
@@ -96,6 +126,8 @@ class Data2VecTrainer:
         self.data_shape = train_set.dataset.get_shape()
 
         # Initialize the model
+
+
 
         # Initialize the optimizer
         self.optimizer = optax.adam(config.learning_rate)
@@ -252,16 +284,23 @@ class Data2VecTrainer:
 
 
 if __name__ == "__main__":
-    args = Data2VecTrainer().parse_args()
+    args = Data2VecTrainerParser().parse_args()
 
-    # if args.distributed == True:
-    #     initialize()
-    #     print(jax.process_count())
+    if args.distributed == True:
+        initialize()
+        if jax.process_index() == 0:
+            print("Total number of process: " + str(jax.process_count()))
 
-    # n_processes = jax.process_count()
-    # if jax.process_index() == 0:
-    #     trainer = SDEDiffusionTrainer(args, logging=True)
-    #     trainer.train()
-    # else:
-    #     trainer = SDEDiffusionTrainer(args, logging=False)
-    #     trainer.train()
+    n_processes = jax.process_count()
+    if jax.process_index() == 0:
+        trainer = Data2VecTrainer(args, logging=True)
+        if not os.path.exists(args.output_path):
+            os.makedirs(args.output_path)
+        with open(args.output_path + "/args.json", "w") as file:
+            output_dict = args.as_dict()
+            output_dict["data_shape"] = trainer.data_shape
+            json.dump(output_dict, file, indent=4)
+        trainer.train()
+    else:
+        trainer = Data2VecTrainer(args, logging=False)
+        trainer.train()

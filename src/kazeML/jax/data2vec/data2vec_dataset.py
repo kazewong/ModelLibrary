@@ -9,7 +9,7 @@ class Data2VecDataset(Dataset):
     def __init__(
         self,
         path: str,
-        data_length: int,
+        data_length: int = -1,
         transform=None,
         n_example: int = 1,
         mask_fraction: float = 0.1,
@@ -41,6 +41,10 @@ class Data2VecDataset(Dataset):
     ) -> tuple[
         Float[torch.Tensor, "n_channel n_size"], Float[torch.Tensor, "n_example n_size"]
     ]:
+        if self.data_length == -1:
+            print("Data length not specified. Please initialize with your network")
+            raise ValueError
+
         sample = self.data[index]
         if self.transform != None:
             for f in self.transform:

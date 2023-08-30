@@ -15,13 +15,6 @@ from kazeML.jax.data2vec.feature_extractor import FeatureExtractor
 class Data2VecConfig:
     transformer_encoder_config: TransformerConfig
 
-    layer_scale_init_value: float = 1e-4
-    image_size: int = 224
-    patch_size: int = 16
-    in_channels: int = 3
-
-    shared_rel_pos_bias: bool = True
-
     drop_path: float = 0.1
     attention_dropout: float = 0.0
     embed_dim: int = 768
@@ -47,10 +40,18 @@ class Data2Vec(eqx.Module):
     def __init__(
         self,
         key: PRNGKeyArray,
+        feature_extractor: FeatureExtractor,
+        config: Data2VecConfig,
     ):
         super().__init__()
 
         key, subkey = jax.random.split(key)
+        self.feature_extractor = feature_extractor
+        self.encoder = TransformerEncoder(subkey, config.transformer_encoder_config)
+        self.mask_embedding = jax.random.normal(subkey, (config.embed_dim,))
+        self.ema = EMAModule(self.encoder, config.ema_decay)
+        self.mask_fraction = config.mask_fraction
+        self.top_k_layer = config.top_k_layer
 
     def __call__(self, x: Array) -> Array:
         raise NotImplementedError
@@ -58,9 +59,13 @@ class Data2Vec(eqx.Module):
     def embed(self, x: Array, key: PRNGKeyArray, deterministic: bool = True) -> Array:
         key, subkey = jax.random.split(key)
         if deterministic:
-            extractor: FeatureExtractor = eqx.tree_inference(self.feature_extractor, value=True)
+            extractor: FeatureExtractor = eqx.tree_inference(
+                self.feature_extractor, value=True
+            )
         else:
-            extractor: FeatureExtractor = eqx.tree_inference(self.feature_extractor, value=True)
+            extractor: FeatureExtractor = eqx.tree_inference(
+                self.feature_extractor, value=True
+            )
         feature: Array = extractor.extract_features(x, subkey)
         key, subkey = jax.random.split(key)
         return self.encoder(feature, subkey, None)
@@ -74,7 +79,9 @@ class Data2Vec(eqx.Module):
         key, subkey = jax.random.split(key)
         feature = self.feature_extractor.extract_features(data, subkey)
 
-        mask_feature = tree_map(lambda x: feature * (1 - x) + x * self.mask_embedding, mask)
+        mask_feature = tree_map(
+            lambda x: feature * (1 - x) + x * self.mask_embedding, mask
+        )
 
         pos_embedding = self.encoder.positional_embedding(feature)
         feature += pos_embedding
@@ -82,12 +89,16 @@ class Data2Vec(eqx.Module):
 
         key, subkey = jax.random.split(key)
         feature = self.encoder.dropout_block(feature, key=subkey)
-        key, *subkey = jax.random.split(key,len(mask)+1)
-        mask_feature = tree_map(lambda x, local_key: self.encoder.dropout_block(x, key=local_key), mask_feature, subkey)
+        key, *subkey = jax.random.split(key, len(mask) + 1)
+        mask_feature = tree_map(
+            lambda x, local_key: self.encoder.dropout_block(x, key=local_key),
+            mask_feature,
+            subkey,
+        )
 
         if self.encoder.embedding_layer_norm is not None:
             feature = self.encoder.embedding_layer_norm(feature)
-            mask_feature = tree_map(lambda x: self.encoder.embedding_layer_norm(x), mask_feature) # type: ignore
+            mask_feature = tree_map(lambda x: self.encoder.embedding_layer_norm(x), mask_feature)  # type: ignore
 
         key, subkey = jax.random.split(key)
         target = self.ema.model.forward(feature, subkey, None, layer_result=True)
@@ -96,11 +107,13 @@ class Data2Vec(eqx.Module):
 
         key, *subkey = jax.random.split(key, len(mask) + 1)
         prediction = tree_map(
-            lambda x, local_key: self.ema.model.forward(x, local_key, None, layer_result=False),
+            lambda x, local_key: self.ema.model.forward(
+                x, local_key, None, layer_result=False
+            ),
             mask_feature,
             subkey,
         )
-        return prediction, target
+        return jnp.array(prediction), target
 
     def d2v_loss(
         self,
