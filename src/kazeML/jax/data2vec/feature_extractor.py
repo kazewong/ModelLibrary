@@ -12,7 +12,7 @@ class FeatureExtractor(eqx.Module):
         pass
 
     @abstractmethod
-    def extract_features(self, data: Array) -> Array:
+    def extract_features(self, data: Float[Array, "n_channel size"], key: PRNGKeyArray = None) -> Array:
         """
 
         The first dimension should be number of patches and the second dimension should be size of embedding.

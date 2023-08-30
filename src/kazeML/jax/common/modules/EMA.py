@@ -2,7 +2,9 @@ import equinox as eqx
 import jax
 import jax.numpy as jnp
 from jaxtyping import Array, PRNGKeyArray, PyTree
-from typing import Callable, Union
+from typing import Callable, Union, Generic, TypeVar
+
+T = TypeVar("T")
 
 def replace(model, update):
     if update is None:
@@ -10,17 +12,17 @@ def replace(model, update):
     else:
         return update
 
-class EMAModule(eqx.Module):
+class EMAModule(eqx.Module, Generic[T]):
     """
     Exponential Moving Average tracking of a model's parameters.
     """
 
-    model: eqx.Module
+    model: T
     decay: float = 0.99
     log_norms: bool = False
 
     def __init__(self,
-                model: eqx.Module,
+                model: T,
                 decay: float = 0.99,
                 log_norms: bool = False):
         self.model = model 
