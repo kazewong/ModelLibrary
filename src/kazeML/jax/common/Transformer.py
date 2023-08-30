@@ -3,7 +3,7 @@ import jax
 import jax.numpy as jnp
 from jaxtyping import Array, ArrayLike, PRNGKeyArray
 from typing import Optional, Callable
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, fields
 
 from kazeML.jax.common.modules.Embedding import EmbedBase, PositionalEmbedding
 
@@ -42,7 +42,13 @@ class TransformerConfig:
             "help": "dropout probability after activation in FFN.",
             "alias": "--relu-dropout",
         },
-    ) 
+    )
+
+    def __init__(self, **kwargs):
+        names = set([f.name for f in fields(self)])
+        for k, v in kwargs.items():
+            if k in names:
+                setattr(self, k, v)
 
 
 class TransformerEncoderLayer(eqx.Module):
