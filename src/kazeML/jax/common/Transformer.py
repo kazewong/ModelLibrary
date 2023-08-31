@@ -1,7 +1,7 @@
 import equinox as eqx
 import jax
 import jax.numpy as jnp
-from jaxtyping import Array, ArrayLike, PRNGKeyArray
+from jaxtyping import Array, ArrayLike, PRNGKeyArray, Float
 from typing import Optional, Callable
 from dataclasses import dataclass, field, fields
 
@@ -177,7 +177,7 @@ class TransformerEncoder(eqx.Module):
         self.layer_norm = eqx.nn.LayerNorm(shape=cfg.embed_dim)
     
     def __call__(self,
-                embedding: Array,
+                embedding: Float[Array, "length embed_dim"],
                 key: PRNGKeyArray,
                 mask: Optional[Array] = None,) -> Array | list:
         return self.forward(embedding, key, mask)

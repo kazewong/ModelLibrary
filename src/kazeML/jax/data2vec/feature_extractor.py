@@ -37,7 +37,7 @@ class SeriesFeatureExtractor(FeatureExtractor):
     def __init__(
         self,
         key: PRNGKeyArray,
-        layer_spec: list[tuple[int, int, int, int]], # (in_channel, out_channel, kernel_size, stride)
+        layer_spec: list[tuple[int, int, int]], # (in_channel, out_channel, kernel_size, stride)
         p_dropout: float = 0.0,
         affine_group_norm: bool = False,
         log_compression: bool = False,

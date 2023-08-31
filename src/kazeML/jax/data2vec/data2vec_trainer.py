@@ -39,6 +39,7 @@ class Data2VecTrainerParser(Tap):
     # Transformer hyperparameters
 
     max_length: int = 512
+    embed_dim: int = 512
     layernorm_embedding: bool = False
     ffn_embed_dim: int = 2048
     layers: int = 6
@@ -46,6 +47,13 @@ class Data2VecTrainerParser(Tap):
     embedding_dropout: float = 0.1
     attention_dropout: float = 0.0
     activation_dropout: float = 0.0
+
+    # Data2Vec hyperparameters
+
+    n_example: int = 5
+    mask_fraction: float = 0.1
+    mask_length: float = 0.1
+    min_masks: int = 1
 
     # Training hyperparameters
     n_epochs: int = 500
@@ -81,16 +89,20 @@ class Data2VecTrainer:
         )
 
         # Initialize the dataset
-        dataset = Data2VecDataset(config.data_path)
+        dataset = Data2VecDataset(config.data_path,
+        n_example=config.n_example,
+        mask_fraction=config.mask_fraction,
+        mask_length=config.mask_length,
+        min_masks=config.min_masks,
+        seed=config.seed+4,)
 
         key = jax.random.PRNGKey(config.seed + 3)
         key, subkey = jax.random.split(key)
         layer_spec = list(
             zip(
-                config.FE_channels[:-1],
-                config.FE_channels[1:],
-                config.FE_kernels[:-1],
-                config.FE_strides[:-1],
+                config.FE_channels,
+                config.FE_kernels,
+                config.FE_strides,
             )
         )
         if dataset.n_dim == 1:
@@ -108,12 +120,16 @@ class Data2VecTrainer:
 
         dataset.set_data_length(feature_extractor)
 
+        config_dict = config.as_dict()
+        config_dict['max_length'] = dataset.data_length
+        config_dict['embed_dim'] = config_dict['FE_channels'][-1]
+
         transformer_config = TransformerConfig(
             activation=jax.nn.gelu,
-            max_length=dataset.data_length, **config.as_dict()
+            **config_dict
         )
 
-        data2Vec_config = Data2VecConfig(transformer_encoder_config=transformer_config, **config.as_dict())
+        data2Vec_config = Data2VecConfig(transformer_encoder_config=transformer_config, **config_dict)
         self.model = Data2Vec(
             subkey, feature_extractor=feature_extractor, config=data2Vec_config
         )
@@ -203,25 +219,26 @@ class Data2VecTrainer:
     # def validate(self):
     #     pass
 
-    # @staticmethod
-    # @eqx.filter_jit
-    # def train_step(
-    #     model: Data2Vec,
-    #     opt_state: PyTree,
-    #     batch: Float[Array, "batch 1 datashape"],
-    #     key: PRNGKeyArray,
-    #     opt_update,
-    # ):
-    #     keys = jax.random.split(key, batch.shape[0])
-    #     single_device_loss = lambda model, batch, key: jnp.mean(
-    #         jax.vmap(model.loss)(batch, key)
-    #     )
-    #     loss_values, grads = eqx.filter_value_and_grad(single_device_loss)(
-    #         model, batch, keys
-    #     )
-    #     updates, opt_state = opt_update(grads, opt_state, model)
-    #     model = eqx.apply_updates(model, updates)
-    #     return model, opt_state, loss_values
+    @staticmethod
+    @eqx.filter_jit
+    def train_step(
+        model: Data2Vec,
+        opt_state: PyTree,
+        batch: Float[Array, "batch 1 datashape"],
+        mask: Float[Array, "batch n_example datashape"],
+        key: PRNGKeyArray,
+        opt_update,
+    ):
+        keys = jax.random.split(key, batch.shape[0])
+        single_device_loss = lambda model, batch, key: jnp.mean(
+            jax.vmap(model.loss)(batch, key)
+        )
+        loss_values, grads = eqx.filter_value_and_grad(single_device_loss)(
+            model, batch, keys
+        )
+        updates, opt_state = opt_update(grads, opt_state, model)
+        model = eqx.apply_updates(model, updates)
+        return model, opt_state, loss_values
 
     # @staticmethod
     # @eqx.filter_jit

@@ -74,32 +74,27 @@ class Data2Vec(eqx.Module):
     def forward_pair(
         self,
         data: Float[Array, "n_channel n_size"],
-        mask: list[Float[Array, "n_example n_channel n_size"]],
+        mask: Float[Array, "n_example n_token"],
         key: PRNGKeyArray,
     ) -> tuple[PyTree, Array]:
         key, subkey = jax.random.split(key)
-        feature = self.feature_extractor.extract_features(data, subkey)
+        feature = self.feature_extractor.extract_features(data, subkey).T # to [n_token, n_embed]
+        mask = mask[..., None]
 
-        mask_feature = tree_map(
-            lambda x: feature * (1 - x) + x * self.mask_embedding, mask
-        )
+        mask_feature = feature * (1 - mask) + mask * self.mask_embedding
 
         pos_embedding = self.encoder.positional_embedding(feature)
         feature += pos_embedding
-        mask_feature = tree_map(lambda x: x + pos_embedding, mask_feature)
+        mask_feature = mask_feature + pos_embedding
 
         key, subkey = jax.random.split(key)
         feature = self.encoder.dropout_block(feature, key=subkey)
         key, *subkey = jax.random.split(key, len(mask) + 1)
-        mask_feature = tree_map(
-            lambda x, local_key: self.encoder.dropout_block(x, key=local_key),
-            mask_feature,
-            subkey,
-        )
+        mask_feature = jax.vmap(lambda x, local_key: self.encoder.dropout_block(x, key=local_key), in_axes=(0,0))(mask_feature, jnp.array(subkey))
 
         if self.encoder.embedding_layer_norm is not None:
             feature = self.encoder.embedding_layer_norm(feature)
-            mask_feature = tree_map(lambda x: self.encoder.embedding_layer_norm(x), mask_feature)  # type: ignore
+            mask_feature = jax.vmap(self.encoder.embedding_layer_norm)(mask_feature)  # type: ignore
 
         key, subkey = jax.random.split(key)
         target = self.ema.model.forward(feature, subkey, None, layer_result=True)
@@ -107,13 +102,8 @@ class Data2Vec(eqx.Module):
         target = jnp.mean(jnp.stack(target), axis=0)
 
         key, *subkey = jax.random.split(key, len(mask) + 1)
-        prediction = tree_map(
-            lambda x, local_key: self.ema.model.forward(
-                x, local_key, None, layer_result=False
-            ),
-            mask_feature,
-            subkey,
-        )
+        prediction = jax.vmap(
+            lambda x, local_key: self.ema.model.forward(x, local_key, None, layer_result=False))(mask_feature,jnp.array(subkey))
         return jnp.array(prediction), target
 
     def d2v_loss(
