@@ -1,6 +1,7 @@
 from torch.utils.data import Dataset
 import torch
 import h5py
+import jax.numpy as jnp
 from jaxtyping import Array, Float
 import numpy as np
 from kazeML.jax.data2vec.feature_extractor import FeatureExtractor
@@ -100,4 +101,4 @@ class Data2VecDataset(Dataset):
         return mask
     
     def set_data_length(self, feature_extractor: FeatureExtractor):
-        self.data_length = feature_extractor.extract_features(self.data[0]).shape[-1]
+        self.data_length = feature_extractor.extract_features(jnp.array(self.data[0])).shape[-1]

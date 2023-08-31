@@ -78,8 +78,9 @@ class SeriesFeatureExtractor(FeatureExtractor):
 
     def extract_features(self, data: Float[Array, "n_channel size"], key: PRNGKeyArray = None) -> Array:
         residual = data
+        subkey = key
         for i in range(len(self.layer)):
-            key, subkey = jax.random.split(key)
+            if key != None: key, subkey = jax.random.split(key)
             data = self.layer[i](data, key = subkey)
             if self.skip_connections and data.shape[1] == residual.shape[1]:
                 residual = residual[..., :: residual.shape[-1] // data.shape[-1]][
