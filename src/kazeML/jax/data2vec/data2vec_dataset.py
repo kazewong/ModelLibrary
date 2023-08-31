@@ -46,7 +46,7 @@ class Data2VecDataset(Dataset):
             print("Data length not specified. Please initialize with your network")
             raise ValueError
 
-        sample = self.data[index]
+        sample = torch.from_numpy(self.data[index])
         if self.transform != None:
             for f in self.transform:
                 sample = f(sample)

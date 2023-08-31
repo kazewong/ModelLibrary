@@ -32,7 +32,7 @@ class TransformerConfig:
     attention_heads: int = field(
         default=8, metadata={"help": "number of attention heads"}
     )
-    dropout: float = field(default=0.1, metadata={"help": "Embedding dropout probability"})
+    embedding_dropout: float = field(default=0.1, metadata={"help": "Embedding dropout probability"})
     attention_dropout: float = field(
         default=0.0, metadata={"help": "dropout probability for attention weights"}
     )
@@ -88,7 +88,7 @@ class TransformerEncoderLayer(eqx.Module):
                                                         query_size=cfg.embed_dim,
                                                         dropout_p=cfg.attention_dropout)
 
-        self.dropout_layer = eqx.nn.Dropout(p=cfg.dropout)
+        self.dropout_layer = eqx.nn.Dropout(p=cfg.embedding_dropout)
         self.activation_dropout_layer = eqx.nn.Dropout(p=cfg.activation_dropout)
 
         # Set full connected layers
@@ -171,7 +171,7 @@ class TransformerEncoder(eqx.Module):
             self.attention_blocks.append(TransformerEncoderLayer(subkey,cfg))
 
         # Setup dropout block
-        self.dropout_block = eqx.nn.Dropout(p=cfg.dropout)
+        self.dropout_block = eqx.nn.Dropout(p=cfg.embedding_dropout)
 
         # Setup layer norm
         self.layer_norm = eqx.nn.LayerNorm(shape=cfg.embed_dim)

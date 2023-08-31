@@ -1,10 +1,9 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, fields
 import equinox as eqx
 import jax
 import jax.numpy as jnp
 from jax.tree_util import tree_map
 from jaxtyping import Array, PRNGKeyArray, Float, PyTree
-from typing import Callable, Union
 
 from kazeML.jax.common.Transformer import TransformerEncoder, TransformerConfig
 from kazeML.jax.common.modules.EMA import EMAModule
@@ -15,13 +14,15 @@ from kazeML.jax.data2vec.feature_extractor import FeatureExtractor
 class Data2VecConfig:
     transformer_encoder_config: TransformerConfig
 
-    drop_path: float = 0.1
-    attention_dropout: float = 0.0
-    embed_dim: int = 768
-
     ema_decay: float = 0.99
     mask_fraction: float = 0.6
     top_k_layer = 3
+
+    def __init__(self, **kwargs):
+        names = set([f.name for f in fields(self)])
+        for k, v in kwargs.items():
+            if k in names:
+                setattr(self, k, v)
 
 
 class Data2Vec(eqx.Module):
@@ -48,7 +49,7 @@ class Data2Vec(eqx.Module):
         key, subkey = jax.random.split(key)
         self.feature_extractor = feature_extractor
         self.encoder = TransformerEncoder(subkey, config.transformer_encoder_config)
-        self.mask_embedding = jax.random.normal(subkey, (config.embed_dim,))
+        self.mask_embedding = jax.random.normal(subkey, (config.transformer_encoder_config.embed_dim,))
         self.ema = EMAModule(self.encoder, config.ema_decay)
         self.mask_fraction = config.mask_fraction
         self.top_k_layer = config.top_k_layer

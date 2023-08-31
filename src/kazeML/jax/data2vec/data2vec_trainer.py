@@ -38,6 +38,15 @@ class Data2VecTrainerParser(Tap):
 
     # Transformer hyperparameters
 
+    max_length: int = 512
+    layernorm_embedding: bool = False
+    ffn_embed_dim: int = 2048
+    layers: int = 6
+    attention_heads: int = 8
+    embedding_dropout: float = 0.1
+    attention_dropout: float = 0.0
+    activation_dropout: float = 0.0
+
     # Training hyperparameters
     n_epochs: int = 500
     batch_size: int = 16
@@ -100,10 +109,11 @@ class Data2VecTrainer:
         dataset.set_data_length(feature_extractor)
 
         transformer_config = TransformerConfig(
+            activation=jax.nn.gelu,
             max_length=dataset.data_length, **config.as_dict()
         )
 
-        data2Vec_config = Data2VecConfig(transformer_config, **config.as_dict())
+        data2Vec_config = Data2VecConfig(transformer_encoder_config=transformer_config, **config.as_dict())
         self.model = Data2Vec(
             subkey, feature_extractor=feature_extractor, config=data2Vec_config
         )
