@@ -29,17 +29,17 @@ class EMAModule(eqx.Module, Generic[T]):
         self.decay = decay
         self.log_norms = log_norms
 
-    def __call__(self, new_model: eqx.Module) -> eqx.Module:
+    def __call__(self, new_model: eqx.Module) -> T:
         return self.step(new_model)
 
     def set_decay(self, decay: float) -> eqx.Module:
         return eqx.tree_at(lambda x: x.decay, self, decay)
 
-    def set_model(self, pyTree: PyTree) -> eqx.Module:
+    def set_model(self, pyTree: PyTree) -> T:
         new_tree = jax.tree_util.tree_map(replace, jax.tree_util.tree_leaves(self.model), pyTree)
         return eqx.tree_at(lambda x: jax.tree_util.tree_leaves(x), self.model, new_tree)
 
-    def step(self, new_model: eqx.Module) -> eqx.Module:
+    def step(self, new_model: eqx.Module) -> T:
         decay = self.decay
         lr = 1 - decay
         ema_params = eqx.filter(jax.tree_util.tree_leaves(self.model), eqx.is_array)

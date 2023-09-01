@@ -300,6 +300,7 @@ class Data2VecTrainer:
             model, opt_state, loss_values = self.train_step(
                 model, opt_state, global_batch, global_mask, subkey, self.optimizer.update
             )
+            self.model.ema.model = self.model.ema.step(model)
             if log_loss:
                 train_loss += jnp.sum(process_allgather(loss_values))
         train_loss = (

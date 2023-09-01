@@ -76,7 +76,7 @@ class Data2Vec(eqx.Module):
         data: Float[Array, "n_channel n_size"],
         mask: Float[Array, "n_example n_token"],
         key: PRNGKeyArray,
-    ) -> tuple[PyTree, Array]:
+    ) -> tuple[Float[Array, "n_example n_token n_embed"], Float[Array, "n_token n_embed"]]:
         key, subkey = jax.random.split(key)
         feature = self.feature_extractor.extract_features(data, subkey).T # to [n_token, n_embed]
         mask = mask[..., None]
@@ -99,21 +99,21 @@ class Data2Vec(eqx.Module):
         key, subkey = jax.random.split(key)
         target = self.ema.model.forward(feature, subkey, None, layer_result=True)
         target = target[-self.top_k_layer :]
-        target = jnp.mean(jnp.stack(target), axis=0)
+        target = jax.lax.stop_gradient(jnp.mean(jnp.stack(target), axis=0))
 
         key, *subkey = jax.random.split(key, len(mask) + 1)
         prediction = jax.vmap(
-            lambda x, local_key: self.ema.model.forward(x, local_key, None, layer_result=False))(mask_feature,jnp.array(subkey))
+            lambda x, local_key: self.encoder.forward(x, local_key, None, layer_result=False))(mask_feature,jnp.array(subkey))
         return jnp.array(prediction), target
 
     def d2v_loss(
         self,
         data: Float[Array, "n_channel n_size"],
-        mask: list[Float[Array, "n_example n_channel n_size"]],
+        mask: Float[Array, "n_example n_channel n_size"],
         key: PRNGKeyArray,
     ) -> Array:
         student, teacher = self.forward_pair(data, mask, key)
-        return jnp.mean((student - teacher) ** 2)
+        return jnp.mean((student[mask] - teacher) ** 2)
 
     def save_model(self, path: str):
         eqx.tree_serialise_leaves(path + ".eqx", self)
