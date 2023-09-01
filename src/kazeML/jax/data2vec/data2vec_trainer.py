@@ -120,6 +120,9 @@ class Data2VecTrainer:
 
         dataset.set_data_length(feature_extractor)
 
+        self.data_shape = dataset.data_shape
+        self.mask_shape = (config.n_example, dataset.data_length)
+
         config_dict = config.as_dict()
         config_dict['max_length'] = dataset.data_length
         config_dict['embed_dim'] = config_dict['FE_channels'][-1]
@@ -169,52 +172,53 @@ class Data2VecTrainer:
         # Initialize the optimizer
         self.optimizer = optax.adam(config.learning_rate)
         self.opt_state = self.optimizer.init(eqx.filter(self.model, eqx.is_array))
+        self.key = jax.random.PRNGKey(config.seed+5)
 
-    # def train(self):
-    #     if jax.process_index() == 0:
-    #         print("Start training")
-    #     max_loss = 1e10
-    #     self.best_model = self.model
-    #     for step in range(self.config.n_epochs):
-    #         if jax.process_index() == 0:
-    #             print("Epoch: ", step)
-    #         if step % self.config.log_epoch == 0:
-    #             self.key, subkey = jax.random.split(self.key)
-    #             self.model, self.opt_state, train_loss = self.train_epoch(
-    #                 self.model,
-    #                 self.opt_state,
-    #                 self.train_loader,
-    #                 subkey,
-    #                 step,
-    #                 log_loss=True,
-    #             )
-    #             self.key, subkey = jax.random.split(self.key)
-    #             test_loss = self.test_epoch(self.model, self.test_loader, subkey, step)
+    def train(self):
+        if jax.process_index() == 0:
+            print("Start training")
+        max_loss = 1e10
+        self.best_model = self.model
+        for step in range(self.config.n_epochs):
+            if jax.process_index() == 0:
+                print("Epoch: ", step)
+            if step % self.config.log_epoch == 0:
+                self.key, subkey = jax.random.split(self.key)
+                self.model, self.opt_state, train_loss = self.train_epoch(
+                    self.model,
+                    self.opt_state,
+                    self.train_loader,
+                    subkey,
+                    step,
+                    log_loss=True,
+                )
+                self.key, subkey = jax.random.split(self.key)
+                test_loss = self.test_epoch(self.model, self.test_loader, subkey, step)
 
-    #             if max_loss > test_loss:
-    #                 max_loss = test_loss
-    #                 self.best_model = self.model
-    #             if self.logging:
-    #                 Logger.current_logger().report_scalar(
-    #                     "Loss", "training_loss", value=train_loss, iteration=step
-    #                 )
-    #                 Logger.current_logger().report_scalar(
-    #                     "Loss", "test_loss", value=test_loss, iteration=step
-    #                 )
-    #                 self.best_model.save_model("./best_model")
-    #                 Task.current_task().upload_artifact(
-    #                     artifact_object="./best_model", name="model"
-    #                 )
-    #         else:
-    #             self.key, subkey = jax.random.split(self.key)
-    #             self.model, self.opt_state, train_loss = self.train_epoch(
-    #                 self.model,
-    #                 self.opt_state,
-    #                 self.train_loader,
-    #                 subkey,
-    #                 step,
-    #                 log_loss=False,
-    #             )
+                if max_loss > test_loss:
+                    max_loss = test_loss
+                    self.best_model = self.model
+                if self.logging:
+                    Logger.current_logger().report_scalar(
+                        "Loss", "training_loss", value=train_loss, iteration=step
+                    )
+                    Logger.current_logger().report_scalar(
+                        "Loss", "test_loss", value=test_loss, iteration=step
+                    )
+                    self.best_model.save_model("./best_model")
+                    Task.current_task().upload_artifact(
+                        artifact_object="./best_model", name="model"
+                    )
+            else:
+                self.key, subkey = jax.random.split(self.key)
+                self.model, self.opt_state, train_loss = self.train_epoch(
+                    self.model,
+                    self.opt_state,
+                    self.train_loader,
+                    subkey,
+                    step,
+                    log_loss=False,
+                )
 
     # def validate(self):
     #     pass
@@ -230,96 +234,128 @@ class Data2VecTrainer:
         opt_update,
     ):
         keys = jax.random.split(key, batch.shape[0])
-        single_device_loss = lambda model, batch, key: jnp.mean(
-            jax.vmap(model.loss)(batch, key)
+        single_device_loss = lambda model, batch, mask, key: jnp.mean(
+            jax.vmap(model.d2v_loss)(batch, mask, key)
         )
         loss_values, grads = eqx.filter_value_and_grad(single_device_loss)(
-            model, batch, keys
+            model, batch, mask, keys
         )
         updates, opt_state = opt_update(grads, opt_state, model)
         model = eqx.apply_updates(model, updates)
         return model, opt_state, loss_values
 
-    # @staticmethod
-    # @eqx.filter_jit
-    # def test_step(
-    #     model: Data2Vec,
-    #     batch: Float[Array, "batch 1 datashape"],
-    #     mask: list[Float[Array, "n_example n_channel n_size"]],
-    #     key: PRNGKeyArray,
-    # ):
-    #     keys = jax.random.split(key, batch.shape[0])
-    #     loss_values = jnp.mean(jax.vmap(model.d2v_loss)(batch, keys))
-    #     return loss_values
+    @staticmethod
+    @eqx.filter_jit
+    def test_step(
+        model: Data2Vec,
+        batch: Float[Array, "batch 1 datashape"],
+        mask: Float[Array, "batch n_example datashape"],
+        key: PRNGKeyArray,
+    ):
+        keys = jax.random.split(key, batch.shape[0])
+        loss_values = jnp.mean(jax.vmap(model.d2v_loss)(batch, mask, keys))
+        return loss_values
 
-    # def train_epoch(
-    #     self,
-    #     model: Data2Vec,
-    #     opt_state: PyTree,
-    #     trainloader: DataLoader,
-    #     key: PRNGKeyArray,
-    #     epoch: int,
-    #     log_loss: bool = False,
-    # ) -> tuple[Data2Vec, PyTree, Array | float]:
-    #     self.train_loader.sampler.set_epoch(epoch)
-    #     train_loss = 0
-    #     for batch in trainloader:
-    #         key, subkey = jax.random.split(key)
-    #         local_batch = jnp.array(batch)
-    #         global_shape = (
-    #             jax.process_count() * local_batch.shape[0],
-    #         ) + self.data_shape
+    def train_epoch(
+        self,
+        model: Data2Vec,
+        opt_state: PyTree,
+        trainloader: DataLoader,
+        key: PRNGKeyArray,
+        epoch: int,
+        log_loss: bool = False,
+    ) -> tuple[Data2Vec, PyTree, float]:
+        self.train_loader.sampler.set_epoch(epoch)
+        train_loss = 0
+        for batch in trainloader:
+            key, subkey = jax.random.split(key)
+            local_batch, local_mask = jnp.array(batch[0]), jnp.array(batch[1])
+            global_batch_shape = (
+                jax.process_count() * local_batch.shape[0],
+            ) + self.data_shape
 
-    #         arrays = jax.device_put(
-    #             jnp.split(local_batch, len(self.global_mesh.local_devices), axis=0),
-    #             self.global_mesh.local_devices,
-    #         )
-    #         global_batch = jax.make_array_from_single_device_arrays(
-    #             global_shape, self.sharding, arrays
-    #         )
-    #         model, opt_state, loss_values = self.train_step(
-    #             model, opt_state, global_batch, subkey, self.optimizer.update
-    #         )
-    #         if log_loss:
-    #             train_loss += jnp.sum(process_allgather(loss_values))
-    #     train_loss = (
-    #         train_loss
-    #         / jax.process_count()
-    #         / len(trainloader)
-    #         / np.sum(self.data_shape)
-    #     )
-    #     return model, opt_state, train_loss
+            global_mask_shape = (
+                jax.process_count() * local_batch.shape[0],
+            ) + self.mask_shape
 
-    # def test_epoch(
-    #     self,
-    #     model: Data2Vec,
-    #     testloader: DataLoader,
-    #     key: PRNGKeyArray,
-    #     epoch: int,
-    # ):
-    #     test_loss = 0
-    #     self.test_loader.sampler.set_epoch(epoch)
-    #     for batch in testloader:
-    #         key, subkey = jax.random.split(key)
-    #         local_batch = jnp.array(batch)
-    #         global_shape = (
-    #             jax.process_count() * local_batch.shape[0],
-    #         ) + self.data_shape
 
-    #         arrays = jax.device_put(
-    #             jnp.split(local_batch, len(self.global_mesh.local_devices), axis=0),
-    #             self.global_mesh.local_devices,
-    #         )
-    #         global_batch = jax.make_array_from_single_device_arrays(
-    #             global_shape, self.sharding, arrays
-    #         )
-    #         test_loss += jnp.sum(
-    #             process_allgather(self.test_step(model, global_batch, subkey))
-    #         )
-    #     test_loss_values = (
-    #         test_loss / jax.process_count() / len(testloader) / np.sum(self.data_shape)
-    #     )
-    #     return test_loss_values
+            batch_arrays = jax.device_put(
+                jnp.split(local_batch, len(self.global_mesh.local_devices), axis=0),
+                self.global_mesh.local_devices,
+            )
+
+            batch_mask = jax.device_put(
+                jnp.split(local_mask, len(self.global_mesh.local_devices), axis=0),
+                self.global_mesh.local_devices,
+            )
+
+            global_batch = jax.make_array_from_single_device_arrays(
+                global_batch_shape, self.sharding, batch_arrays
+            )
+
+            global_mask = jax.make_array_from_single_device_arrays(
+                global_mask_shape, self.sharding, batch_mask
+            )
+
+            model, opt_state, loss_values = self.train_step(
+                model, opt_state, global_batch, global_mask, subkey, self.optimizer.update
+            )
+            if log_loss:
+                train_loss += jnp.sum(process_allgather(loss_values))
+        train_loss = (
+            train_loss
+            / jax.process_count()
+            / len(trainloader)
+            / np.sum(self.data_shape)
+        )
+        return model, opt_state, train_loss
+
+    def test_epoch(
+        self,
+        model: Data2Vec,
+        testloader: DataLoader,
+        key: PRNGKeyArray,
+        epoch: int,
+    ):
+        test_loss = 0
+        self.test_loader.sampler.set_epoch(epoch)
+        for batch in testloader:
+            key, subkey = jax.random.split(key)
+            local_batch, local_mask = jnp.array(batch[0]), jnp.array(batch[1])
+            global_batch_shape = (
+                jax.process_count() * local_batch.shape[0],
+            ) + self.data_shape
+
+            global_mask_shape = (
+                jax.process_count() * local_batch.shape[0],
+            ) + self.mask_shape
+
+
+            batch_arrays = jax.device_put(
+                jnp.split(local_batch, len(self.global_mesh.local_devices), axis=0),
+                self.global_mesh.local_devices,
+            )
+
+            batch_mask = jax.device_put(
+                jnp.split(local_mask, len(self.global_mesh.local_devices), axis=0),
+                self.global_mesh.local_devices,
+            )
+
+            global_batch = jax.make_array_from_single_device_arrays(
+                global_batch_shape, self.sharding, batch_arrays
+            )
+
+            global_mask = jax.make_array_from_single_device_arrays(
+                global_mask_shape, self.sharding, batch_mask
+            )
+
+            test_loss += jnp.sum(
+                process_allgather(self.test_step(model, global_batch, global_mask, subkey))
+            )
+        test_loss_values = (
+            test_loss / jax.process_count() / len(testloader) / np.sum(self.data_shape)
+        )
+        return test_loss_values
 
 
 if __name__ == "__main__":
@@ -338,10 +374,10 @@ if __name__ == "__main__":
             with open(args.output_path + "/args.json", "w") as file:
                 output_dict = args.as_dict()
                 json.dump(output_dict, file, indent=4)
-            # trainer.train()
+            trainer.train()
         else:
             trainer = Data2VecTrainer(args, logging=False)
-            # trainer.train()
+            trainer.train()
     else:
         trainer = Data2VecTrainer(args, logging=True)
-        # trainer.train()
+        trainer.train()

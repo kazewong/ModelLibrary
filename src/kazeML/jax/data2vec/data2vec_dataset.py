@@ -102,3 +102,7 @@ class Data2VecDataset(Dataset):
     
     def set_data_length(self, feature_extractor: FeatureExtractor):
         self.data_length = feature_extractor.extract_features(jnp.array(self.data[0])).shape[-1]
+
+    @property
+    def data_shape(self):
+        return self.data[0].shape
