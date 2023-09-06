@@ -113,7 +113,7 @@ class Data2Vec(eqx.Module):
         key: PRNGKeyArray,
     ) -> Array:
         student, teacher = self.forward_pair(data, mask, key)
-        return jnp.mean((student[mask] - teacher) ** 2)
+        return jnp.mean((student - teacher) ** 2)
 
     def save_model(self, path: str):
         eqx.tree_serialise_leaves(path + ".eqx", self)

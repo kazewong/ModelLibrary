@@ -214,7 +214,7 @@ class SDEDiffusionTrainer:
             print("Start training")
         max_loss = 1e10
         self.best_model = self.model
-        logging_key = jax.random.PRNGKey(self.config.seed + 1203472)
+        logging_key = jax.random.PRNGKey(self.key + 1203472)
 
         if self.logging:
             logging_key, subkey = jax.random.split(logging_key)
