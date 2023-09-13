@@ -21,8 +21,6 @@ from kazeML.jax.diffusion.sde_score import (
 )
 from kazeML.jax.diffusion.diffusion_dataset import DiffusionDataset
 import numpy as np
-import json
-import os
 
 
 class SDEDiffusionExperimentParser(Tap):
@@ -33,10 +31,6 @@ class SDEDiffusionExperimentParser(Tap):
     project_name: str = "DiffusionAstro"
     distributed: bool = False
     conditional: bool = False
-
-    # Dataset hyperparameters
-    normalize: bool = False
-    window_size: int = 128
 
     # Training hyperparameters
     n_epochs: int = 100
@@ -89,7 +83,7 @@ class BigParser(SDEDiffusionExperimentParser, SDEDiffusionModelParser):
     pass
 
 class SDEDiffusionTrainer:
-    def __init__(self, config: BigParser, logging: bool = False):
+    def __init__(self, dataset: DiffusionDataset, config: BigParser, logging: bool = False):
         self.config = config
         self.logging = logging
         if logging and (jax.process_index() == 0):
@@ -107,20 +101,6 @@ class SDEDiffusionTrainer:
             ),
         )
 
-        transform = []
-        
-
-        # transform.append(
-        #     lambda x: x[
-        #         :,
-        #         x.shape[1] // 2 - config.window_size // 2 : x.shape[1] // 2 + config.window_size // 2,
-        #         x.shape[2] // 2 - config.window_size // 2 : x.shape[2] // 2 + config.window_size // 2,
-        #     ]
-        # )
-
-        dataset = DiffusionDataset(self.config.data_path, transform=transform)
-        if config.normalize:
-            dataset.add_normalize()
 
         train_set, test_set = random_split(
             dataset, [config.train_test_ratio, 1 - config.train_test_ratio]
@@ -378,26 +358,3 @@ class SDEDiffusionTrainer:
         loss = loss / jax.process_count() / len(data_loader) / np.sum(self.data_shape)
         return model, opt_state, loss
 
-
-if __name__ == "__main__":
-    args = BigParser().parse_args()
-
-    if args.distributed == True:
-        initialize()
-        if jax.process_index() == 0:
-            print("Total number of process: " + str(jax.process_count()))
-
-
-    n_processes = jax.process_count()
-    if jax.process_index() == 0:
-        trainer = SDEDiffusionTrainer(args, logging=True)
-        if not os.path.exists(args.output_path):
-            os.makedirs(args.output_path)
-        with open(args.output_path + "/args.json", "w") as file:
-            output_dict = args.as_dict()
-            output_dict["data_shape"] = trainer.data_shape
-            json.dump(output_dict, file, indent=4)
-        trainer.train()
-    else:
-        trainer = SDEDiffusionTrainer(args, logging=False)
-        trainer.train()
