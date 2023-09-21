@@ -208,7 +208,7 @@ class TransformerEncoder(eqx.Module):
 
     def forward(
         self,
-        embedding: Array,
+        embedding: Float[Array, "length embed_dim"],
         key: PRNGKeyArray,
         mask: Optional[Array] = None,
         layer_result: bool = False,
