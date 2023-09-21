@@ -70,11 +70,11 @@ class Data2VecTrainerParser(Tap):
 
 
 class Data2VecTrainer:
-    def __init__(self, config: Data2VecTrainerParser, logging: bool = False):
+    def __init__(self, dataset: Data2VecDataset, config: Data2VecTrainerParser, logging: bool = False):
         self.config = config
         self.logging = logging
         if logging and (jax.process_index() == 0):
-            Task.init(project_name=args.project_name, task_name=args.experiment_name)
+            Task.init(project_name=config.project_name, task_name=config.experiment_name)
 
         # Initialize distributed training
         n_processes = jax.process_count()
@@ -204,8 +204,8 @@ class Data2VecTrainer:
 
                 if self.logging:
                     logging_key, subkey = jax.random.split(logging_key)
-                    Logger.current_logger().report_scalar("Loss", "training_loss", value=train_loss, iteration=step)  # type: ignore
-                    Logger.current_logger().report_scalar("Loss", "test_loss", value=test_loss, iteration=step)  
+                    Logger.current_logger().report_scalar("Loss", "training_loss", value=float(train_loss), iteration=step)  # type: ignore
+                    Logger.current_logger().report_scalar("Loss", "test_loss", value=float(test_loss), iteration=step)  
                     self.model.save_model(self.config.output_path + "/latest_model")
                     Task.current_task().upload_artifact(
                         name="latest_model",
@@ -266,7 +266,7 @@ class Data2VecTrainer:
         log_loss: bool = False,
         train: bool = True
     ) -> tuple[Data2Vec, PyTree, Float[Array, "1"]]:
-        data_loader.sampler.set_epoch(epoch)
+        data_loader.sampler.set_epoch(epoch) # type: ignore
         loss = jnp.array([0.])
         for batch in data_loader:
             key, subkey = jax.random.split(key)
@@ -311,26 +311,3 @@ class Data2VecTrainer:
         return model, opt_state, loss
 
 
-if __name__ == "__main__":
-    args = Data2VecTrainerParser().parse_args()
-
-    if args.distributed == True:
-        initialize()
-        if jax.process_index() == 0:
-            print("Total number of process: " + str(jax.process_count()))
-
-        n_processes = jax.process_count()
-        if jax.process_index() == 0:
-            trainer = Data2VecTrainer(args, logging=True)
-            if not os.path.exists(args.output_path):
-                os.makedirs(args.output_path)
-            with open(args.output_path + "/args.json", "w") as file:
-                output_dict = args.as_dict()
-                json.dump(output_dict, file, indent=4)
-            trainer.train()
-        else:
-            trainer = Data2VecTrainer(args, logging=False)
-            trainer.train()
-    else:
-        trainer = Data2VecTrainer(args, logging=True)
-        trainer.train()
