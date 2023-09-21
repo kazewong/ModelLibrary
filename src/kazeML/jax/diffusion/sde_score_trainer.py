@@ -82,8 +82,11 @@ class SDEDiffusionModelParser(Tap):
 class BigParser(SDEDiffusionExperimentParser, SDEDiffusionModelParser):
     pass
 
+
 class SDEDiffusionTrainer:
-    def __init__(self, dataset: DiffusionDataset, config: BigParser, logging: bool = False):
+    def __init__(
+        self, dataset: DiffusionDataset, config: BigParser, logging: bool = False
+    ):
         self.config = config
         self.logging = logging
         if logging and (jax.process_index() == 0):
@@ -101,10 +104,10 @@ class SDEDiffusionTrainer:
             ),
         )
 
-
         train_set, test_set = random_split(
             dataset, [config.train_test_ratio, 1 - config.train_test_ratio]
         )
+
         train_sampler = DistributedSampler(
             train_set,
             num_replicas=n_processes,
@@ -357,4 +360,3 @@ class SDEDiffusionTrainer:
                 loss += jnp.sum(process_allgather(loss_values))
         loss = loss / jax.process_count() / len(data_loader) / np.sum(self.data_shape)
         return model, opt_state, loss
-
