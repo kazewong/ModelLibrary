@@ -265,9 +265,9 @@ class Data2VecTrainer:
         epoch: int,
         log_loss: bool = False,
         train: bool = True
-    ) -> tuple[Data2Vec, PyTree, float]:
+    ) -> tuple[Data2Vec, PyTree, Float[Array, "1"]]:
         data_loader.sampler.set_epoch(epoch)
-        loss = 0
+        loss = jnp.array([0.])
         for batch in data_loader:
             key, subkey = jax.random.split(key)
             local_batch, local_mask = jnp.array(batch[0]), jnp.array(batch[1])
