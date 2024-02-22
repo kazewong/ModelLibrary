@@ -11,7 +11,6 @@ from jax._src.distributed import initialize
 from jax.experimental.multihost_utils import process_allgather
 from torch.utils.data import DataLoader, random_split
 from torch.utils.data.distributed import DistributedSampler
-from clearml import Task, Logger
 from kazeML.jax.common.Unet import Unet, UnetConfig
 from kazeML.jax.diffusion.sde import VESDE
 from kazeML.jax.diffusion.sde_score import (
@@ -20,8 +19,8 @@ from kazeML.jax.diffusion.sde_score import (
     LangevinCorrector,
 )
 from kazeML.jax.diffusion.diffusion_dataset import DiffusionDataset
-import numpy as np
 
+import wandb
 
 class SDEDiffusionExperimentParser(Tap):
     # Metadata about the experiment
@@ -90,8 +89,10 @@ class SDEDiffusionTrainer:
         self.config = config
         self.logging = logging
         if logging and (jax.process_index() == 0):
-            Task.init(
-                project_name=config.project_name, task_name=config.experiment_name
+            wandb.init(
+                project=config.project_name,
+                name=config.experiment_name,
+                config=config.as_dict(),
             )
 
         n_processes = jax.process_count()
@@ -204,33 +205,26 @@ class SDEDiffusionTrainer:
         if self.logging:
             logging_key, subkey = jax.random.split(logging_key)
             prior = self.model.sde.sample_prior(subkey, self.data_shape)
-            Logger.current_logger().report_single_value("prior_min", np.min(prior))
-            Logger.current_logger().report_single_value("prior_max", np.max(prior))
-            Logger.current_logger().report_single_value("prior_mean", np.mean(prior))
+            wandb.log(
+                {
+                    "prior_min": np.min(prior),
+                    "prior_max": np.max(prior),
+                    "prior_mean": np.mean(prior),
+                }
+            )
             logging_time = jnp.linspace(0, 1, self.config.log_t_step)
             for idx, time in enumerate(logging_time):
                 logging_key, subkey = jax.random.split(logging_key)
                 marginal = self.model.sde.marginal_prob(prior, jnp.array(time))
-                # score = self.model.score(prior, time.reshape(1,))
-                Logger.current_logger().report_single_value(
-                    f"QC_prior_mariginal_mean_{idx}_median", np.median(marginal[0])
-                )
-                Logger.current_logger().report_single_value(
-                    f"QC_prior_marginal_mean_{idx}_max_abs",
-                    np.max(jnp.abs(marginal[0])),
-                )
-                Logger.current_logger().report_single_value(
-                    f"QC_prior_marginal_mean_{idx}_min_abs",
-                    np.min(jnp.abs(marginal[0])),
-                )
-                Logger.current_logger().report_single_value(
-                    f"QC_prior_marginal_std_{idx}_median", np.median(marginal[1])
-                )
-                Logger.current_logger().report_single_value(
-                    f"QC_prior_marginal_std_{idx}_max_abs", np.max(jnp.abs(marginal[1]))
-                )
-                Logger.current_logger().report_single_value(
-                    f"QC_prior_marginal_std_{idx}_min_abs", np.min(jnp.abs(marginal[1]))
+                wandb.log(
+                    {
+                        f"QC_prior_mariginal_mean_{idx}_median": np.median(marginal[0]),
+                        f"QC_prior_marginal_mean_{idx}_max_abs": np.max(jnp.abs(marginal[0])),
+                        f"QC_prior_marginal_mean_{idx}_min_abs": np.min(jnp.abs(marginal[0])),
+                        f"QC_prior_marginal_std_{idx}_median": np.median(marginal[1]),
+                        f"QC_prior_marginal_std_{idx}_max_abs": np.max(jnp.abs(marginal[1])),
+                        f"QC_prior_marginal_std_{idx}_min_abs": np.min(jnp.abs(marginal[1])),
+                    }
                 )
 
         for step in range(self.config.n_epochs):
@@ -265,27 +259,14 @@ class SDEDiffusionTrainer:
 
                 if self.logging:
                     logging_key, subkey = jax.random.split(logging_key)
-                    Logger.current_logger().report_scalar("Loss", "training_loss", value=train_loss, iteration=step)  # type: ignore
-                    Logger.current_logger().report_scalar("Loss", "test_loss", value=test_loss, iteration=step)  # type: ignore
-                    # local_batch = jnp.array(next(iter(self.test_loader)))
-                    # global_shape = (jax.process_count() * local_batch.shape[0], ) + self.data_shape
-
-                    # arrays = jax.device_put(jnp.split(local_batch, len(self.global_mesh.local_devices), axis = 0), self.global_mesh.local_devices)
-                    # global_batch = jax.make_array_from_single_device_arrays(global_shape, self.sharding, arrays)
-                    # result = self.get_score(self.best_model, global_batch , subkey, self.config.log_t_step)
-                    # for idx, time in enumerate(result[0]):
-                    #     Logger.current_logger().report_scalar("QC", f"test_score_{idx}", value=result[1][idx], iteration=step)
+                    wandb.log(
+                        {
+                            "training_loss": train_loss,
+                            "test_loss": test_loss,
+                        },
+                        step=step,
+                    )
                     self.model.save_model(self.config.output_path + "/latest_model")
-                    Task.current_task().upload_artifact(
-                        name="latest_model",
-                        artifact_object=self.config.output_path + "/latest_model.eqx",
-                        metadata={"step": step},
-                    )
-                    Task.current_task().upload_artifact(
-                        "best_model",
-                        artifact_object=self.config.output_path + "/best_model.eqx",
-                        metadata={"step": step},
-                    )
 
             else:
                 self.key, subkey = jax.random.split(self.key)

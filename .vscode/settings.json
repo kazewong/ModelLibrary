@@ -8,5 +8,6 @@
     "python.formatting.provider": "none",
     "python.analysis.extraPaths": [
         "./src"
-    ]
+    ],
+    "python.analysis.autoImportCompletions": false
 }

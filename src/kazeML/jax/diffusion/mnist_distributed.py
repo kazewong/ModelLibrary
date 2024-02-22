@@ -9,7 +9,6 @@ from jax.experimental.multihost_utils import process_allgather
 from torch.utils.data import DataLoader
 from torch.utils.data.distributed import DistributedSampler
 import numpy as np
-from clearml import Task
 from kazeML.jax.diffusion.sde import VESDE
 from kazeML.jax.diffusion.sde_score import ScoreBasedSDE, GaussianFourierFeatures
 from kazeML.jax.common.Unet import Unet
