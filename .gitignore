@@ -4,3 +4,4 @@ mlruns/*
 build/*
 *.egg-info
 *.eqx
+experiment/

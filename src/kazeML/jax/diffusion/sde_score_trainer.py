@@ -128,6 +128,7 @@ class SDEDiffusionTrainer:
             num_workers=config.num_workers,
             sampler=train_sampler,
             prefetch_factor=config.prefetch_factor,
+            pin_memory=False,
         )
         self.test_loader = DataLoader(
             test_set,
@@ -135,6 +136,7 @@ class SDEDiffusionTrainer:
             num_workers=config.num_workers,
             sampler=test_sampler,
             prefetch_factor=config.prefetch_factor,
+            pin_memory=False,
         )
 
         self.data_shape = train_set.dataset.get_shape()
@@ -197,7 +199,7 @@ class SDEDiffusionTrainer:
             print("Start training")
         max_loss = 1e10
         self.best_model = self.model
-        logging_key = jax.random.PRNGKey(self.key + 1203472)
+        logging_key = jax.random.PRNGKey(self.config.seed + 1203472)
 
         if self.logging:
             logging_key, subkey = jax.random.split(logging_key)
