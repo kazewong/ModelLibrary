@@ -344,12 +344,11 @@ class SDEDiffusionTrainer:
         loss = loss / jax.process_count() / len(data_loader) / np.sum(self.data_shape)
         return model, opt_state, loss
 
-    def norm_check(self, key: PRNGKeyArray, model: ScoreBasedSDE):
-        noise_sample = 0.7 * jax.random.normal(rng, shape=(4096,))
+    def norm_check(self, key: PRNGKeyArray, model: ScoreBasedSDE, data: Float[Array, " 1 datashape"]):
         score_slic_mags = []
         score_gaussian_mags = []
         
-        t_set = jnp.linspace(1.0, 1e-5, 1000)
+        t_set = jnp.linspace(1, 1e-5, self.model.sde.N)
         for t in t_set:
             sigma_t = config.model.sigma_min * (config.model.sigma_max/config.model.sigma_min)**t
             rng, step_rng = jax.random.split(rng)
