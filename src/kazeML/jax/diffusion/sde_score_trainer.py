@@ -343,3 +343,27 @@ class SDEDiffusionTrainer:
                 loss += jnp.sum(process_allgather(loss_values))
         loss = loss / jax.process_count() / len(data_loader) / np.sum(self.data_shape)
         return model, opt_state, loss
+
+    def norm_check(self):
+        noise_sample = 0.7 * jax.random.normal(rng, shape=(4096,))
+            
+            score_slic_mags = []
+            score_gaussian_mags = []
+            
+            t_set = jnp.linspace(1.0, 1e-5, 1000)
+            for t in t_set:
+                sigma_t = config.model.sigma_min * (config.model.sigma_max/config.model.sigma_min)**t
+                rng, step_rng = jax.random.split(rng)
+                
+                x_t = noise_sample + sigma_t * jax.random.normal(rng, shape=(noise_sample.flatten().shape))
+            
+                score_slic = score_fn(x_t[None,...,None], t*jnp.ones((1,), dtype=jax_dtype))[0,...,0]
+
+                score_gaussian_mag = jnp.sqrt(x_t.flatten().shape[0])
+                score_slic_mag = jnp.sqrt(jnp.sum((sigma_t * score_slic)**2))
+                
+                score_slic_mags.append(score_slic_mag)
+                score_gaussian_mags.append(score_gaussian_mag)
+                
+            score_slic_mags = np.array(score_slic_mags)
+            score_gaussian_mags = np.array(score_gaussian_mags)
