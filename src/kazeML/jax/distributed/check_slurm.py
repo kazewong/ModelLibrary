@@ -41,6 +41,7 @@ arrays = jax.device_put(
     np.split(local_array, len(global_mesh.local_devices), axis = 0), global_mesh.local_devices)
 sharding = jax.sharding.NamedSharding(global_mesh, P(('b'), ))
 arr = jax.make_array_from_single_device_arrays(global_shape, sharding, arrays)
+print(arr.devices())
 print(jnp.sum(multihost_utils.process_allgather(arr))+loss_values)
 print(local_array.shape,  arr.shape)
 print(arrays)
