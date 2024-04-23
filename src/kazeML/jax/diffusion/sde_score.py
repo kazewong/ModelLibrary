@@ -118,7 +118,7 @@ class NoneCorrector(Corrector):
 class ScoreBasedSDE(eqx.Module):
     autoencoder: Unet
     time_feature: GaussianFourierFeatures
-    time_embed: eqx.nn.Linear
+    time_embed: eqx.nn.Sequential
     weight_function: Callable
     sde: SDE
     predictor: Callable
@@ -132,7 +132,7 @@ class ScoreBasedSDE(eqx.Module):
         self,
         autoencoder: Unet,
         time_feature: GaussianFourierFeatures,
-        time_embed: eqx.nn.Linear,
+        time_embed: eqx.nn.Sequential,
         weight_function: Callable,
         sde: SDE,
         predictor: Predictor | None = None,
