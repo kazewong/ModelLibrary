@@ -88,10 +88,10 @@ class VPSDE(SDE):
         self.beta = beta
 
     def drift(self, x: Array, t: Array) -> Array:
-        return -x*beta(t)/2
+        return -x*self.beta(t)/2
 
     def diffusion(self, x: Array, t: Array) -> Array:
-        return jnp.sqrt(beta(t))
+        return jnp.sqrt(self.beta(t))
         
     def marginal_prob(self, x: Array, t: Array) -> tuple[Array, Array]:
         raise NotImplementedError
