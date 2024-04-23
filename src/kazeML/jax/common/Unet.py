@@ -40,6 +40,8 @@ class Unet(eqx.Module):
     DownBlocks: list[ResnetBlock]
     UpBlocks: list[ResnetBlock]
     BottleNeck: list[ResnetBlock]
+    FinalResBlock: ResnetBlock
+    FinalGroupNorm: eqx.nn.Sequential
 
     @property
     def n_dim(self) -> int:
@@ -95,8 +97,12 @@ class Unet(eqx.Module):
                 self.DownBlocks.append(
                     ResBlock(
                         key=subkey,
-                        num_in_channels=min(config.base_channels * 2**i_level, config.max_channels),
-                        num_out_channels=min(config.base_channels * 2**i_level, config.max_channels),
+                        num_in_channels=min(
+                            config.base_channels * 2**i_level, config.max_channels
+                        ),
+                        num_out_channels=min(
+                            config.base_channels * 2**i_level, config.max_channels
+                        ),
                     )
                 )
             if i_level != config.n_resolution - 1:
@@ -104,31 +110,39 @@ class Unet(eqx.Module):
                 self.DownBlocks.append(
                     ResBlock(
                         key=subkey,
-                        num_in_channels=min(config.base_channels * 2**i_level, config.max_channels),
-                        num_out_channels=min(config.base_channels * 2 ** (i_level + 1), config.max_channels),
+                        num_in_channels=min(
+                            config.base_channels * 2**i_level, config.max_channels
+                        ),
+                        num_out_channels=min(
+                            config.base_channels * 2 ** (i_level + 1),
+                            config.max_channels,
+                        ),
                         sampling="down",
                     )
                 )
                 self.DownBlocks.append(
                     UpDownSampling(
-                    num_dim=config.num_dim,
-                    up=False,
-                    factor=config.up_down_factor,
-                    mode=config.sampling_method,
-                    fir_kernel_size=config.fir_kernel_size,
+                        num_dim=config.num_dim,
+                        up=False,
+                        factor=config.up_down_factor,
+                        mode=config.sampling_method,
+                        fir_kernel_size=config.fir_kernel_size,
+                    )
                 )
-                )
-
 
         for i_block in range(config.n_resnet_blocks):
             key, subkey = jax.random.split(key)
             self.BottleNeck.append(
                 ResBlock(
                     key=subkey,
-                    num_in_channels=min(config.base_channels
-                    * 2 ** (config.n_resolution - 1), config.max_channels),
-                    num_out_channels=min(config.base_channels
-                    * 2 ** (config.n_resolution - 1), config.max_channels),
+                    num_in_channels=min(
+                        config.base_channels * 2 ** (config.n_resolution - 1),
+                        config.max_channels,
+                    ),
+                    num_out_channels=min(
+                        config.base_channels * 2 ** (config.n_resolution - 1),
+                        config.max_channels,
+                    ),
                 )
             )
 
@@ -138,8 +152,12 @@ class Unet(eqx.Module):
                 self.UpBlocks.append(
                     ResBlock(
                         key=subkey,
-                        num_in_channels=min(config.base_channels * 2**i_level, config.max_channels),
-                        num_out_channels=min(config.base_channels * 2**i_level, config.max_channels),
+                        num_in_channels=min(
+                            config.base_channels * 2**i_level, config.max_channels
+                        ),
+                        num_out_channels=min(
+                            config.base_channels * 2**i_level, config.max_channels
+                        ),
                     )
                 )
             if i_level != config.n_resolution - 1:
@@ -147,25 +165,43 @@ class Unet(eqx.Module):
                 self.UpBlocks.append(
                     ResBlock(
                         key=subkey,
-                        num_in_channels=min(config.base_channels * 2 ** (i_level + 1), config.max_channels),
-                        num_out_channels=min(config.base_channels * 2 ** (i_level), config.max_channels),
+                        num_in_channels=min(
+                            config.base_channels * 2 ** (i_level + 1),
+                            config.max_channels,
+                        ),
+                        num_out_channels=min(
+                            config.base_channels * 2 ** (i_level), config.max_channels
+                        ),
                         sampling="up",
                     )
                 )
                 self.UpBlocks.append(
                     UpDownSampling(
-                    num_dim=config.num_dim,
-                    up=True,
-                    factor=config.up_down_factor,
-                    mode=config.sampling_method,
-                    fir_kernel_size=config.fir_kernel_size,
+                        num_dim=config.num_dim,
+                        up=True,
+                        factor=config.up_down_factor,
+                        mode=config.sampling_method,
+                        fir_kernel_size=config.fir_kernel_size,
                     )
                 )
 
-                
         self.UpBlocks = list(reversed(self.UpBlocks))
 
-
+        key, subkey = jax.random.split(key)
+        self.FinalResBlock = ResBlock(
+                    key=subkey,
+                    num_in_channels=config.base_channels * 2,
+                    num_out_channels=config.base_channels,
+                )
+        self.FinalGroupNorm = eqx.nn.Sequential(
+            [
+                eqx.nn.GroupNorm(
+                    min(config.group_norm_size, config.output_channels),
+                    config.output_channels,
+                ),
+                eqx.nn.Lambda(activation),
+            ]
+        )
 
     def __call__(
         self,
@@ -175,8 +211,9 @@ class Unet(eqx.Module):
         train: bool = True,
     ) -> Array:
         key, subkey = jax.random.split(key)
-        x = self.input_conv(x)
         x_res = []
+        x = self.input_conv(x)
+        x_res.append(x)
         for index, block in enumerate(self.DownBlocks):
             key, subkey = jax.random.split(key)
             if type(block) == ResnetBlock:
@@ -190,8 +227,13 @@ class Unet(eqx.Module):
         for block in self.UpBlocks:
             key, subkey = jax.random.split(key)
             if type(block) == ResnetBlock:
-                x = block(x+x_res.pop(), subkey, t, train=train)
+                x = block(x + x_res.pop(), subkey, t, train=train)
             else:
                 x = block(x)
-        x = self.output_conv(x)
+
+        key, subkey = jax.random.split(key)
+        x = jnp.concatenate([x, x_res.pop()], axis=0)
+        x = self.FinalResBlock(x, subkey, t, train=train)
+
+        x = self.output_conv(self.FinalGroupNorm(x))
         return x
