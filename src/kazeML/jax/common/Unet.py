@@ -40,7 +40,6 @@ class Unet(eqx.Module):
     DownBlocks: list[ResnetBlock]
     UpBlocks: list[ResnetBlock]
     BottleNeck: list[ResnetBlock]
-    FinalResBlock: ResnetBlock
     FinalGroupNorm: eqx.nn.Sequential
 
     @property
@@ -147,28 +146,28 @@ class Unet(eqx.Module):
             )
 
         for i_level in range(config.n_resolution):
-            for i_block in range(config.n_resnet_blocks):
+            for i_block in range(config.n_resnet_blocks+1):
                 key, subkey = jax.random.split(key)
                 self.UpBlocks.append(
                     ResBlock(
                         key=subkey,
                         num_in_channels=min(
-                            config.base_channels * 2**i_level, config.max_channels
-                        ),
+                            config.base_channels * 2**(i_level), config.max_channels
+                        )*2,
                         num_out_channels=min(
                             config.base_channels * 2**i_level, config.max_channels
                         ),
                     )
                 )
-            if i_level != config.n_resolution - 1:
+            if i_level != config.n_resolution-1:
                 key, subkey = jax.random.split(key)
                 self.UpBlocks.append(
                     ResBlock(
                         key=subkey,
                         num_in_channels=min(
-                            config.base_channels * 2 ** (i_level + 1),
+                            config.base_channels * 2 ** (i_level),
                             config.max_channels,
-                        ),
+                        )*2,
                         num_out_channels=min(
                             config.base_channels * 2 ** (i_level), config.max_channels
                         ),
@@ -188,16 +187,11 @@ class Unet(eqx.Module):
         self.UpBlocks = list(reversed(self.UpBlocks))
 
         key, subkey = jax.random.split(key)
-        self.FinalResBlock = ResBlock(
-                    key=subkey,
-                    num_in_channels=config.base_channels * 2,
-                    num_out_channels=config.base_channels,
-                )
         self.FinalGroupNorm = eqx.nn.Sequential(
             [
                 eqx.nn.GroupNorm(
                     min(config.group_norm_size, config.output_channels),
-                    config.output_channels,
+                    config.base_channels,
                 ),
                 eqx.nn.Lambda(activation),
             ]
@@ -221,19 +215,19 @@ class Unet(eqx.Module):
                 x_res.append(x)
             else:
                 x = block(x)
+                x_res.pop()
+                x_res.append(x)
         for block in self.BottleNeck:
             key, subkey = jax.random.split(key)
             x = block(x, subkey, t, train=train)
-        for block in self.UpBlocks:
+        for index, block in enumerate(self.UpBlocks):
             key, subkey = jax.random.split(key)
             if type(block) == ResnetBlock:
-                x = block(x + x_res.pop(), subkey, t, train=train)
+                if type(self.UpBlocks[index-1]) == ResnetBlock:
+                    x = jnp.concatenate([x, x_res.pop()], axis=0)
+                x = block(x , subkey, t, train=train)
             else:
                 x = block(x)
-
-        key, subkey = jax.random.split(key)
-        x = jnp.concatenate([x, x_res.pop()], axis=0)
-        x = self.FinalResBlock(x, subkey, t, train=train)
 
         x = self.output_conv(self.FinalGroupNorm(x))
         return x

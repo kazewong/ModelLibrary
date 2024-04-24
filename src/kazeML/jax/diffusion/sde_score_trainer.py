@@ -23,6 +23,7 @@ from kazeML.jax.diffusion.diffusion_dataset import DiffusionDataset
 import wandb
 import matplotlib.pyplot as plt
 
+
 class SDEDiffusionExperimentParser(Tap):
     # Metadata about the experiment
     mode: Literal["train", "predict"] = "train"
@@ -174,9 +175,13 @@ class SDEDiffusionTrainer:
 
         unet = Unet(subkey, unet_config, activation=activation)
         self.key, subkey = jax.random.split(self.key)
-        time_embed = eqx.nn.Linear(
-            config.time_feature, config.embedding_dim, key=subkey
+        subkeys = jax.random.split(subkey, 2)
+        time_embed = eqx.nn.Sequential(
+            [eqx.nn.Linear(config.time_feature, config.time_feature, key=subkeys[0]),
+             eqx.nn.Lambda(activation),
+             eqx.nn.Linear(config.time_feature, config.embedding_dim, key=subkeys[1])]
         )
+
         self.key, subkey = jax.random.split(self.key)
         gaussian_feature = GaussianFourierFeatures(
             config.time_feature, subkey, scale=config.scale
@@ -188,21 +193,24 @@ class SDEDiffusionTrainer:
             unet,
             gaussian_feature,
             time_embed,
-            lambda t: 1.0, # sde_func.marginal_prob(None,t)[1],
+            lambda t: 1.0,# sde_func.marginal_prob(None, t)[1],
             sde_func,
-            #corrector=LangevinCorrector(sde_func, lambda x: x, 0.017, 1),
+            # corrector=LangevinCorrector(sde_func, lambda x: x, 0.017, 1),
         )
 
         self.log_model = ScoreBasedSDE(
             unet,
             gaussian_feature,
             time_embed,
-            lambda t: 1.0, #sde_func.marginal_prob(None,t)[1],
+            lambda t: 1.0, #sde_func.marginal_prob(None, t)[1],
             sde_func,
-            #corrector=LangevinCorrector(sde_func, lambda x: x, 0.017, 1),
+            # corrector=LangevinCorrector(sde_func, lambda x: x, 0.017, 1),
         )
 
-        self.optimizer = optax.adam(config.learning_rate)
+        self.optimizer = optax.chain(
+                            optax.adam(config.learning_rate),
+                            optax.ema(0.999)
+        )
         self.opt_state = self.optimizer.init(eqx.filter(self.model, eqx.is_array))
 
     def train(self):
@@ -223,21 +231,18 @@ class SDEDiffusionTrainer:
                 }
             )
             logging_time = jnp.linspace(0, 1, self.config.log_t_step)
-            # for idx, time in enumerate(logging_time):
-            #     logging_key, subkey = jax.random.split(logging_key)
-            #     marginal = self.model.sde.marginal_prob(prior, jnp.array(time))
-            #     wandb.log(
-            #         {
-            #             f"QC_prior_mariginal_mean_{idx}_median": np.median(marginal[0]),
-            #             f"QC_prior_marginal_mean_{idx}_max_abs": np.max(jnp.abs(marginal[0])),
-            #             f"QC_prior_marginal_mean_{idx}_min_abs": np.min(jnp.abs(marginal[0])),
-            #             f"QC_prior_marginal_std_{idx}_median": np.median(marginal[1]),
-            #             f"QC_prior_marginal_std_{idx}_max_abs": np.max(jnp.abs(marginal[1])),
-            #             f"QC_prior_marginal_std_{idx}_min_abs": np.min(jnp.abs(marginal[1])),
-            #         }
-            #     )
+            test_example = jnp.array(next(iter(self.test_loader)))[0]
+            self.log_norm_check(subkey, self.log_model, test_example)
+            logging_key, subkey = jax.random.split(logging_key)
+            key, x, x_mean = self.log_model.sample(
+                subkey, self.data_shape, self.log_model.sde.N
+            )
+            fig = plt.figure()
+            plt.plot(x.flatten(), label="sample")
+            wandb.log({"sample": fig})
+            plt.close()
 
-        for step in range(1,self.config.n_epochs+1):
+        for step in range(1, self.config.n_epochs + 1):
             if jax.process_index() == 0:
                 print("Epoch: ", step)
             if step % self.config.log_epoch == 0:
@@ -278,17 +283,17 @@ class SDEDiffusionTrainer:
                     )
                     test_example = jnp.array(next(iter(self.test_loader)))[0]
                     self.model.save_model(self.config.output_path + "/latest_model")
-                    log_model = self.log_model.load_model(self.config.output_path + "/best_model")
+                    log_model = self.log_model.load_model(
+                        self.config.output_path + "/best_model"
+                    )
                     self.log_norm_check(subkey, log_model, test_example)
                     logging_key, subkey = jax.random.split(logging_key)
-                    key, x, x_mean = log_model.sample(subkey, self.data_shape, self.log_model.sde.N)
+                    key, x, x_mean = log_model.sample(
+                        subkey, self.data_shape, log_model.sde.N
+                    )
                     fig = plt.figure()
                     plt.plot(x.flatten(), label="sample")
-                    wandb.log(
-                        {
-                            "sample": fig
-                        }
-                    )
+                    wandb.log({"sample": fig})
                     plt.close()
 
             else:
@@ -367,33 +372,33 @@ class SDEDiffusionTrainer:
         loss = loss / jax.process_count() / len(data_loader) / np.sum(self.data_shape)
         return model, opt_state, loss
 
-    def log_norm_check(self, key: PRNGKeyArray, model: ScoreBasedSDE, data: Float[Array, " 1 datashape"]):
+    def log_norm_check(
+        self,
+        key: PRNGKeyArray,
+        model: ScoreBasedSDE,
+        data: Float[Array, " 1 datashape"],
+    ):
         key, subkey = jax.random.split(key)
 
         score_ratio = []
-        
+
         t_set = jnp.linspace(1, 1e-5, model.sde.N)
         for t in t_set:
             _, sigma_t = model.sde.marginal_prob(data, t)
-            
+
             x_t = data + sigma_t * jax.random.normal(subkey, shape=(data.shape))
-        
+
             key, subkey = jax.random.split(key)
             score_slic = eqx.filter_jit(model.score)(x_t, jnp.array([t]), subkey)
 
-            score_gaussian_mag = jnp.sqrt(x_t.flatten().shape[0])
-            score_slic_mag = jnp.sqrt(jnp.sum((sigma_t * score_slic)**2))
-            
-            score_ratio.append(score_slic_mag/score_gaussian_mag)
-            
+            score_gaussian_mag = jnp.sqrt(jnp.sum((x_t/(0.5**2+sigma_t**2))**2))#jnp.sqrt(x_t.flatten().shape[0])
+            score_slic_mag = jnp.sqrt(jnp.sum((score_slic) ** 2))
+
+            score_ratio.append(score_slic_mag / score_gaussian_mag)
+
         t_set = np.array(t_set)
         score_ratio = np.array(score_ratio)
 
         fig = plt.figure()
         plt.plot(t_set, score_ratio)
-        wandb.log(
-                {
-                "score_ratio": fig
-            }
-        )
-
+        wandb.log({"score_ratio": fig})
