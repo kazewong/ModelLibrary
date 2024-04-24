@@ -7,6 +7,7 @@ import jax.numpy as jnp
 import optax
 import equinox as eqx
 import numpy as np
+import copy
 from jax._src.distributed import initialize
 from jax.experimental.multihost_utils import process_allgather
 from torch.utils.data import DataLoader, random_split
@@ -193,23 +194,16 @@ class SDEDiffusionTrainer:
             unet,
             gaussian_feature,
             time_embed,
-            lambda t: 1.0,# sde_func.marginal_prob(None, t)[1],
+            lambda t: 1.0,#sde_func.marginal_prob(None, t)[1],
             sde_func,
             # corrector=LangevinCorrector(sde_func, lambda x: x, 0.017, 1),
         )
 
-        self.log_model = ScoreBasedSDE(
-            unet,
-            gaussian_feature,
-            time_embed,
-            lambda t: 1.0, #sde_func.marginal_prob(None, t)[1],
-            sde_func,
-            # corrector=LangevinCorrector(sde_func, lambda x: x, 0.017, 1),
-        )
+        self.log_model = copy.deepcopy(self.model)
 
         self.optimizer = optax.chain(
                             optax.adam(config.learning_rate),
-                            optax.ema(0.999)
+                            # optax.ema(0.999)
         )
         self.opt_state = self.optimizer.init(eqx.filter(self.model, eqx.is_array))
 
@@ -284,7 +278,7 @@ class SDEDiffusionTrainer:
                     test_example = jnp.array(next(iter(self.test_loader)))[0]
                     self.model.save_model(self.config.output_path + "/latest_model")
                     log_model = self.log_model.load_model(
-                        self.config.output_path + "/best_model"
+                        self.config.output_path + "/latest_model"
                     )
                     self.log_norm_check(subkey, log_model, test_example)
                     logging_key, subkey = jax.random.split(logging_key)
@@ -401,4 +395,5 @@ class SDEDiffusionTrainer:
 
         fig = plt.figure()
         plt.plot(t_set, score_ratio)
+        plt.ylim(0.5, 1.5)
         wandb.log({"score_ratio": fig})

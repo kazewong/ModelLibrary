@@ -86,10 +86,10 @@ class ResnetBlock(eqx.Module):
         if group_norm_size>0:
 
             self.group_norm_in = eqx.nn.GroupNorm(
-                min(group_norm_size, num_in_channels), num_in_channels
+                min(group_norm_size, num_in_channels//4), num_in_channels
             )
             self.group_norm_out = eqx.nn.GroupNorm(
-                min(group_norm_size, num_out_channels), num_out_channels
+                min(group_norm_size, num_out_channels//4), num_out_channels
             )
         else:
             self.group_norm_in = eqx.nn.Lambda(lambda x: x)
@@ -139,10 +139,11 @@ class ResnetBlock(eqx.Module):
 
         x_res = self.conv_in_block(x_res)
         if self.conditional is not None and condition is not None:
-            x_res += jnp.expand_dims(
+            condition_embed = jnp.expand_dims(
                 self.conditional(self.act(condition)),
                 axis=tuple(range(1, self.num_dim + 1)),
             )
+            x_res = x_res + condition_embed
         x_res = self.act(self.group_norm_out(x_res))
         key, subkey = jax.random.split(key)
         x_res = self.dropout(x_res, key=subkey, inference=not train)

@@ -79,16 +79,18 @@ class Unet(eqx.Module):
             config.num_dim,
             config.input_channels,
             config.base_channels,
-            kernel_size=1,
+            kernel_size=3,
             key=subkey,
+            padding=1,
         )
         key, subkey = jax.random.split(key)
         self.output_conv = eqx.nn.Conv(
             config.num_dim,
             config.base_channels,
             config.output_channels,
-            kernel_size=1,
+            kernel_size=3,
             key=subkey,
+            padding=1,
         )
 
         for i_level in range(config.n_resolution):
@@ -173,12 +175,18 @@ class Unet(eqx.Module):
         self.FinalGroupNorm = eqx.nn.Sequential(
             [
                 eqx.nn.GroupNorm(
-                    min(config.group_norm_size, config.output_channels),
+                    min(config.group_norm_size, config.base_channels//4),
                     config.base_channels,
                 ),
                 eqx.nn.Lambda(activation),
             ]
         )
+
+        for i in range(len(self.DownBlocks)):
+            print(self.DownBlocks[i].up_down, self.DownBlocks[i].conv_in_block.in_channels, self.DownBlocks[i].conv_out_block.out_channels)
+
+        for i in range(len(self.UpBlocks)):
+            print(self.UpBlocks[i].up_down, self.UpBlocks[i].conv_in_block.in_channels, self.UpBlocks[i].conv_out_block.out_channels)
 
     def __call__(
         self,
@@ -205,6 +213,5 @@ class Unet(eqx.Module):
                 x = jnp.concatenate([x, x_res.pop()], axis=0)
             x = block(x , subkey, t, train=train)
 
-        assert len(x_res)==0
         x = self.output_conv(self.FinalGroupNorm(x))
         return x

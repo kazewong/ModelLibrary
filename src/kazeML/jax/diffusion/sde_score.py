@@ -159,6 +159,7 @@ class ScoreBasedSDE(eqx.Module):
         # Loss for one data point
         key, subkey = jax.random.split(key)
         random_t = jax.random.uniform(subkey, (1,), minval=eps, maxval=1.0)
+        # random_t = jnp.array([1.0])
         key, subkey = jax.random.split(key)
         z = jax.random.normal(subkey, x.shape)
         mean, std = self.sde.marginal_prob(x, random_t)
@@ -170,7 +171,7 @@ class ScoreBasedSDE(eqx.Module):
 
     def score(self, x: Array, t: Array, key: PRNGKeyArray) -> Array:
         mean, std = self.sde.marginal_prob(x, t)
-        feature = self.time_embed(self.time_feature(x=t))
+        feature = self.time_embed(self.time_feature(t))
         score = self.autoencoder(x, feature, key) / std
         return score
 
