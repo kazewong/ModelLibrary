@@ -82,6 +82,7 @@ class Unet(eqx.Module):
             kernel_size=1,
             key=subkey,
         )
+        key, subkey = jax.random.split(key)
         self.output_conv = eqx.nn.Conv(
             config.num_dim,
             config.base_channels,
@@ -117,15 +118,6 @@ class Unet(eqx.Module):
                             config.max_channels,
                         ),
                         sampling="down",
-                    )
-                )
-                self.DownBlocks.append(
-                    UpDownSampling(
-                        num_dim=config.num_dim,
-                        up=False,
-                        factor=config.up_down_factor,
-                        mode=config.sampling_method,
-                        fir_kernel_size=config.fir_kernel_size,
                     )
                 )
 
@@ -174,15 +166,6 @@ class Unet(eqx.Module):
                         sampling="up",
                     )
                 )
-                self.UpBlocks.append(
-                    UpDownSampling(
-                        num_dim=config.num_dim,
-                        up=True,
-                        factor=config.up_down_factor,
-                        mode=config.sampling_method,
-                        fir_kernel_size=config.fir_kernel_size,
-                    )
-                )
 
         self.UpBlocks = list(reversed(self.UpBlocks))
 
@@ -210,24 +193,18 @@ class Unet(eqx.Module):
         x_res.append(x)
         for index, block in enumerate(self.DownBlocks):
             key, subkey = jax.random.split(key)
-            if type(block) == ResnetBlock:
-                x = block(x, subkey, t, train=train)
-                x_res.append(x)
-            else:
-                x = block(x)
-                x_res.pop()
-                x_res.append(x)
+            x = block(x, subkey, t, train=train)
+            x_res.append(x)
+
         for block in self.BottleNeck:
             key, subkey = jax.random.split(key)
             x = block(x, subkey, t, train=train)
         for index, block in enumerate(self.UpBlocks):
             key, subkey = jax.random.split(key)
-            if type(block) == ResnetBlock:
-                if type(self.UpBlocks[index-1]) == ResnetBlock:
-                    x = jnp.concatenate([x, x_res.pop()], axis=0)
-                x = block(x , subkey, t, train=train)
-            else:
-                x = block(x)
+            if block.up_down == "same":
+                x = jnp.concatenate([x, x_res.pop()], axis=0)
+            x = block(x , subkey, t, train=train)
 
+        assert len(x_res)==0
         x = self.output_conv(self.FinalGroupNorm(x))
         return x

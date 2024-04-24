@@ -17,6 +17,7 @@ class ResnetBlock(eqx.Module):
     conditional: eqx.nn.Linear | None
     skip_rescale: bool
     sampling: Callable
+    up_down: str
 
     @property
     def num_dim(self):
@@ -102,8 +103,10 @@ class ResnetBlock(eqx.Module):
         self.skip_rescale = skip_rescale
         if sampling == "same":
             self.sampling = lambda x: x
+            self.up_down = "same"
         elif sampling == "up":
-            self.sampling = lambda x: naive_upsample(x, n_dim=num_dim, factor=2)
+            self.sampling = lambda x: naive_upsample(x, factor=2)
+            self.up_down = "up"
             #  UpDownSampling(
             #     num_dim=num_dim,
             #     up=True,
@@ -112,7 +115,8 @@ class ResnetBlock(eqx.Module):
             #     fir_kernel_size=fir_kernel_size,
             # )
         elif sampling == "down":
-            self.sampling = lambda x: naive_downsample(x, n_dim=num_dim, factor=2)
+            self.sampling = lambda x: naive_downsample(x, factor=2)
+            self.up_down = "down"
             # self.sampling = UpDownSampling(
             #     num_dim=num_dim,
             #     up=False,
@@ -130,8 +134,8 @@ class ResnetBlock(eqx.Module):
     ) -> Array:
         x_res = self.act(self.group_norm_in(x))
 
-        # x_res = self.sampling(x_res)
-        # x = self.sampling(x)
+        x_res = self.sampling(x_res)
+        x = self.sampling(x)
 
         x_res = self.conv_in_block(x_res)
         if self.conditional is not None and condition is not None:
