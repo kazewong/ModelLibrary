@@ -173,6 +173,7 @@ class ScoreBasedSDE(eqx.Module):
         mean, std = self.sde.marginal_prob(x, t)
         feature = self.time_embed(self.time_feature(t))
         score = self.autoencoder(x, feature, key) / std
+        # score = -x / (std**2+ 0.2**2)
         return score
 
     def sample(
