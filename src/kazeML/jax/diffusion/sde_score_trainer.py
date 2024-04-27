@@ -33,6 +33,7 @@ class SDEDiffusionExperimentParser(Tap):
     project_name: str = "DiffusionAstro"
     distributed: bool = False
     conditional: bool = False
+    debug: bool = False
 
     # Training hyperparameters
     n_epochs: int = 100
@@ -47,6 +48,7 @@ class SDEDiffusionExperimentParser(Tap):
     log_epoch: int = 2
     log_t_step: int = 10
     output_path: str = "./experiment"
+
 
 
 class SDEDiffusionModelParser(Tap):
@@ -178,9 +180,13 @@ class SDEDiffusionTrainer:
         self.key, subkey = jax.random.split(self.key)
         subkeys = jax.random.split(subkey, 2)
         time_embed = eqx.nn.Sequential(
-            [eqx.nn.Linear(config.time_feature, config.time_feature, key=subkeys[0]),
-             eqx.nn.Lambda(activation),
-             eqx.nn.Linear(config.time_feature, config.embedding_dim, key=subkeys[1])]
+            [
+                eqx.nn.Linear(config.time_feature, config.time_feature, key=subkeys[0]),
+                eqx.nn.Lambda(activation),
+                eqx.nn.Linear(
+                    config.time_feature, config.embedding_dim, key=subkeys[1]
+                ),
+            ]
         )
 
         self.key, subkey = jax.random.split(self.key)
@@ -190,6 +196,7 @@ class SDEDiffusionTrainer:
         sde_func = VESDE(
             sigma_min=config.sigma_min, sigma_max=config.sigma_max, N=config.N
         )  # Choosing the sigma drastically affects the training speed
+
         self.model = ScoreBasedSDE(
             unet,
             gaussian_feature,
@@ -201,10 +208,7 @@ class SDEDiffusionTrainer:
 
         self.log_model = copy.deepcopy(self.model)
 
-        self.optimizer = optax.chain(
-                            optax.adam(config.learning_rate),
-                            # optax.ema(0.999)
-        )
+        self.optimizer = optax.chain(optax.adam(config.learning_rate))#, optax.ema(0.999))
         self.opt_state = self.optimizer.init(eqx.filter(self.model, eqx.is_array))
 
     def train(self):
@@ -385,7 +389,9 @@ class SDEDiffusionTrainer:
             key, subkey = jax.random.split(key)
             score_slic = eqx.filter_jit(model.score)(x_t, jnp.array([t]), subkey)
 
-            score_gaussian_mag = jnp.sqrt(jnp.sum((x_t/(0.5**2+sigma_t**2))**2))#jnp.sqrt(x_t.flatten().shape[0])
+            score_gaussian_mag = jnp.sqrt(
+                jnp.sum((x_t / (0.2**2 + sigma_t**2)) ** 2)
+            )  # jnp.sqrt(x_t.flatten().shape[0])
             score_slic_mag = jnp.sqrt(jnp.sum((score_slic) ** 2))
 
             score_ratio.append(score_slic_mag / score_gaussian_mag)
