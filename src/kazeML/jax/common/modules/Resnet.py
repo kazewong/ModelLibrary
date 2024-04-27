@@ -92,8 +92,12 @@ class ResnetBlock(eqx.Module):
                 min(group_norm_size, num_out_channels//4), num_out_channels
             )
         else:
-            self.group_norm_in = eqx.nn.Lambda(lambda x: x)
-            self.group_norm_out = eqx.nn.Lambda(lambda x: x)
+            self.group_norm_in = eqx.nn.GroupNorm(
+               num_in_channels//4, num_in_channels
+            )
+            self.group_norm_out = eqx.nn.GroupNorm(
+                num_out_channels//4, num_out_channels
+            )
 
         if dropout > 0:
             self.dropout = eqx.nn.Dropout(dropout)
