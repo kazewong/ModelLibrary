@@ -208,7 +208,7 @@ class SDEDiffusionTrainer:
 
         self.log_model = copy.deepcopy(self.model)
 
-        self.optimizer = optax.chain(optax.adam(config.learning_rate))#, optax.ema(0.999))
+        self.optimizer = optax.chain(optax.adam(config.learning_rate), optax.ema(0.999))
         self.opt_state = self.optimizer.init(eqx.filter(self.model, eqx.is_array))
 
     def train(self):
@@ -281,9 +281,10 @@ class SDEDiffusionTrainer:
                     )
                     test_example = jnp.array(next(iter(self.test_loader)))[0]
                     self.model.save_model(self.config.output_path + "/latest_model")
-                    log_model = self.log_model.load_model(
-                        self.config.output_path + "/latest_model"
-                    )
+                    log_model = self.best_model
+                    # log_model = self.log_model.load_model(
+                    #     self.config.output_path + "/best_model"
+                    # )
                     self.log_norm_check(subkey, log_model, test_example)
                     logging_key, subkey = jax.random.split(logging_key)
                     key, x, x_mean = log_model.sample(
@@ -343,7 +344,7 @@ class SDEDiffusionTrainer:
     ) -> tuple[ScoreBasedSDE, PyTree, Array | float]:
         data_loader.sampler.set_epoch(epoch)
         loss = 0
-        if self.distributed:
+        if self.config.distributed:
             for batch in data_loader:
                 key, subkey = jax.random.split(key)
                 local_batch = jnp.array(batch)

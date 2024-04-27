@@ -205,11 +205,11 @@ class Unet(eqx.Module):
         for block in self.BottleNeck:
             key, subkey = jax.random.split(key)
             x = block(x, subkey, t, train=train)
-        for index, block in enumerate(self.UpBlocks[:-1]):
+        for index, block in enumerate(self.UpBlocks):
             key, subkey = jax.random.split(key)
             if block.up_down == "same":
                 x = jnp.concatenate([x, x_res.pop()], axis=0)
             x = block(x , subkey, t, train=train)
 
-        x = self.output_conv(self.FinalGroupNorm(x+x_res.pop()))
+        x = self.output_conv(self.FinalGroupNorm(x))
         return x
