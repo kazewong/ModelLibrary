@@ -79,18 +79,16 @@ class Unet(eqx.Module):
             config.num_dim,
             config.input_channels,
             config.base_channels,
-            kernel_size=3,
+            kernel_size=1,
             key=subkey,
-            padding=1,
         )
         key, subkey = jax.random.split(key)
         self.output_conv = eqx.nn.Conv(
             config.num_dim,
             config.base_channels,
             config.output_channels,
-            kernel_size=3,
+            kernel_size=1,
             key=subkey,
-            padding=1,
         )
 
         for i_level in range(config.n_resolution):
@@ -207,11 +205,11 @@ class Unet(eqx.Module):
         for block in self.BottleNeck:
             key, subkey = jax.random.split(key)
             x = block(x, subkey, t, train=train)
-        for index, block in enumerate(self.UpBlocks):
+        for index, block in enumerate(self.UpBlocks[:-1]):
             key, subkey = jax.random.split(key)
             if block.up_down == "same":
                 x = jnp.concatenate([x, x_res.pop()], axis=0)
             x = block(x , subkey, t, train=train)
 
-        x = self.output_conv(self.FinalGroupNorm(x))
+        x = self.output_conv(self.FinalGroupNorm(x+x_res.pop()))
         return x
