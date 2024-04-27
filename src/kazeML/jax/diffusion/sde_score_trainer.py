@@ -343,31 +343,46 @@ class SDEDiffusionTrainer:
     ) -> tuple[ScoreBasedSDE, PyTree, Array | float]:
         data_loader.sampler.set_epoch(epoch)
         loss = 0
-        for batch in data_loader:
-            key, subkey = jax.random.split(key)
-            local_batch = jnp.array(batch)
-            global_shape = (
-                jax.process_count() * local_batch.shape[0],
-            ) + self.data_shape
+        if self.distributed:
+            for batch in data_loader:
+                key, subkey = jax.random.split(key)
+                local_batch = jnp.array(batch)
+                global_shape = (
+                    jax.process_count() * local_batch.shape[0],
+                ) + self.data_shape
 
-            arrays = jax.device_put(
-                jnp.split(local_batch, len(self.global_mesh.local_devices), axis=0),
-                self.global_mesh.local_devices,
-            )
-            global_batch = jax.make_array_from_single_device_arrays(
-                global_shape, self.sharding, arrays
-            )
-            model, opt_state, loss_values = self.run_step(
-                model,
-                opt_state,
-                global_batch,
-                subkey,
-                self.optimizer.update,
-                train=train,
-            )
-            if log_loss:
-                loss += jnp.sum(process_allgather(loss_values))
-        loss = loss / jax.process_count() / len(data_loader) / np.sum(self.data_shape)
+                arrays = jax.device_put(
+                    jnp.split(local_batch, len(self.global_mesh.local_devices), axis=0),
+                    self.global_mesh.local_devices,
+                )
+                global_batch = jax.make_array_from_single_device_arrays(
+                    global_shape, self.sharding, arrays
+                )
+                model, opt_state, loss_values = self.run_step(
+                    model,
+                    opt_state,
+                    global_batch,
+                    subkey,
+                    self.optimizer.update,
+                    train=train,
+                )
+                if log_loss:
+                    loss += jnp.sum(process_allgather(loss_values))
+            loss = loss / jax.process_count() / len(data_loader) / np.sum(self.data_shape)
+        else:
+            for batch in data_loader:
+                key, subkey = jax.random.split(key)
+                model, opt_state, loss_values = self.run_step(
+                    model,
+                    opt_state,
+                    jnp.array(batch),
+                    subkey,
+                    self.optimizer.update,
+                    train=train,
+                )
+                if log_loss:
+                    loss += jnp.sum(loss_values)
+            loss = loss / len(data_loader) / np.sum(self.data_shape)
         return model, opt_state, loss
 
     def log_norm_check(
