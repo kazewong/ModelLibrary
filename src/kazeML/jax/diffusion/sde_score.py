@@ -52,7 +52,8 @@ class EulerMaruyamaPredictor(Predictor):
     def __call__(
         self, key: PRNGKeyArray, x: Array, time: Array, step_size: float
     ) -> tuple[Array, Array]:
-        drift, diffusion = self.sde.reverse_sde(x, time.reshape(1), self.score)
+        key, subkey = jax.random.split(key)
+        drift, diffusion = self.sde.reverse_sde(subkey, x, time.reshape(1), self.score)
         x_mean = x - drift * step_size
         key, subkey = jax.random.split(key)
         x = x_mean + diffusion * jnp.sqrt(step_size) * jax.random.normal(
@@ -65,7 +66,8 @@ class ReverseDiffusionPredictor(Predictor):
     def __call__(
         self, key: PRNGKeyArray, x: Array, time: Array, step_size: float
     ) -> tuple[Array, Array]:
-        drift, diffusion = self.sde.reverse_discretize(x, time.reshape(1), self.score)
+        key, subkey = jax.random.split(key)
+        drift, diffusion = self.sde.reverse_discretize(subkey, x, time.reshape(1), self.score)
         x_mean = x - drift
         key, subkey = jax.random.split(key)
         x = x_mean + diffusion * jax.random.normal(subkey, x.shape)
@@ -183,11 +185,9 @@ class ScoreBasedSDE(eqx.Module):
         eps: float = 1e-5,
     ) -> tuple[Array, Array, PRNGKeyArray]:
         model = eqx.tree_inference(self, value=True)
-        self.predictor.score = eqx.Partial(model.score, key=jax.random.PRNGKey(0))
-        self.corrector.score = eqx.Partial(model.score, key=jax.random.PRNGKey(0))
-        predictor = jax.jit(self.predictor)
-        corrector = jax.jit(self.corrector)
         key, subkey = jax.random.split(key)
+        predictor = jax.jit(EulerMaruyamaPredictor(self.sde, self.score, False)) # TODO makes this generic
+        corrector = jax.jit(NoneCorrector(self.sde, self.score, 0, 1))
         x_init = self.sde.sample_prior(subkey, data_shape)
         time_steps = jnp.linspace(self.sde.T, eps, n_steps)
         step_size = time_steps[0] - time_steps[1]
@@ -210,7 +210,7 @@ class ScoreBasedSDE(eqx.Module):
         eps: float = 1e-3,
     ):
         model = eqx.tree_inference(self, value=True)
-        self.predictor.score = eqx.Partial(model.score, key=jax.random.PRNGKey(0))
+        self.predictor.score = eqx.Partial(model.score, key=jax.random.PRNGKey(0)) # TODO Change this
         self.corrector.score = eqx.Partial(model.score, key=jax.random.PRNGKey(0))
         predictor = self.predictor
         corrector = self.corrector
@@ -271,7 +271,7 @@ class ScoreBasedSDE(eqx.Module):
         """
         model = eqx.tree_inference(self, value=True)
         conditional_function = eqx.Partial(conditional_function, y=condtional_data)
-        self.predictor.score = eqx.Partial(model.score, key=jax.random.PRNGKey(0))
+        self.predictor.score = eqx.Partial(model.score, key=jax.random.PRNGKey(0)) # TODO makes this generic
         self.corrector.score = eqx.Partial(model.score, key=jax.random.PRNGKey(0))
         key, subkey = jax.random.split(key)
         x_init = self.sde.sample_prior(subkey, data_shape)

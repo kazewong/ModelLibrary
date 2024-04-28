@@ -66,17 +66,19 @@ class SDE(eqx.Module):
         G = diffusion * jnp.sqrt(dt)
         return f, G
     
-    def reverse_sde(self, x:Array, t: Array, score_fn: Callable, probability_flow=False):
+    def reverse_sde(self, key: PRNGKeyArray, x:Array, t: Array, score_fn: Callable, probability_flow=False):
+        key, subkey = jax.random.split(key)
         drift, diffusion = self.sde(x, t)
-        score = score_fn(x, t)
+        score = score_fn(x, t, key)
         drift = drift - (diffusion ** 2) * score * (0.5 if probability_flow else 1.)
         # Set the diffusion function to zero for ODEs.
         diffusion = jnp.zeros_like(diffusion) if probability_flow else diffusion
         return drift, diffusion
     
-    def reverse_discretize(self, x: Array, t: Array, score_fn: Callable, probability_flow=False):
+    def reverse_discretize(self, key: PRNGKeyArray, x: Array, t: Array, score_fn: Callable, probability_flow=False):
+        key, subkey = jax.random.split(key)
         f, G = self.discretize(x, t)
-        rev_f = f - (G ** 2)*score_fn(x, t) * (0.5 if probability_flow else 1.)
+        rev_f = f - (G ** 2)*score_fn(x, t, subkey) * (0.5 if probability_flow else 1.)
         rev_G = jnp.zeros_like(G) if probability_flow else G
         return rev_f, rev_G
 
