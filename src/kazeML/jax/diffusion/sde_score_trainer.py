@@ -64,7 +64,7 @@ class SDEDiffusionModelParser(Tap):
     # UNet hyperparameters
     embedding_dim: int = 128
     base_channels: int = 64
-    max_channels: int = 128
+    max_channels: int = 512
     up_down_factor: int = 2
     n_resolution: int = 4
     n_resnet_blocks: int = 2
@@ -208,7 +208,7 @@ class SDEDiffusionTrainer:
 
         self.log_model = copy.deepcopy(self.model)
 
-        self.optimizer = optax.chain(optax.adam(config.learning_rate))#, optax.ema(0.999))
+        self.optimizer = optax.chain(optax.adam(config.learning_rate), optax.ema(0.999))
         self.opt_state = self.optimizer.init(eqx.filter(self.model, eqx.is_array))
 
     def train(self):
