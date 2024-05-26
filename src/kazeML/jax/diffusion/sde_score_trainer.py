@@ -201,14 +201,21 @@ class SDEDiffusionTrainer:
             unet,
             gaussian_feature,
             time_embed,
-            lambda t: 1./sde_func.marginal_prob(None, t)[1],
+            lambda t: 1.0/sde_func.marginal_prob(None, t)[1],
             sde_func,
             # corrector=LangevinCorrector(sde_func, lambda x: x, 0.017, 1),
         )
 
         self.log_model = copy.deepcopy(self.model)
 
-        self.optimizer = optax.chain(optax.adam(config.learning_rate), optax.clip_by_global_norm(1.0), optax.ema(0.999))
+        learning_rate = config.learning_rate        
+        # learning_rate = optax.cosine_decay_schedule(
+        #     init_value=config.learning_rate,
+        #     decay_steps=config.n_epochs//100,
+        #     alpha=1e-6,
+        # )
+
+        self.optimizer = optax.chain(optax.adamw(learning_rate), optax.clip_by_global_norm(1.0), optax.ema(0.999))
         self.opt_state = self.optimizer.init(eqx.filter(self.model, eqx.is_array))
 
     def train(self):
@@ -229,7 +236,7 @@ class SDEDiffusionTrainer:
                 }
             )
             logging_time = jnp.linspace(0, 1, self.config.log_t_step)
-            test_example = jnp.array(next(iter(self.test_loader)))
+            test_example = jnp.array(next(iter(self.test_loader)))[0]
             self.log_norm_check(subkey, self.log_model, test_example)
             logging_key, subkey = jax.random.split(logging_key)
             key, x, x_mean = self.log_model.sample(
@@ -393,31 +400,34 @@ class SDEDiffusionTrainer:
     ):
         key, subkey = jax.random.split(key)
 
-        score_ratio = []
+        diagnostic = []
 
         t_set = jnp.linspace(1, 1e-5, model.sde.N)
+        
         for t in t_set:
-            key, subkey = jax.random.split(key)
-
             _, sigma_t = model.sde.marginal_prob(data, t)
 
             x_t = data + sigma_t * jax.random.normal(subkey, shape=(data.shape))
 
             key, subkey = jax.random.split(key)
-            subkey = jax.random.split(subkey, data.shape[0])
-            score_slic = eqx.filter_vmap(eqx.filter_jit(model.score), in_axes=(0, None, 0))(x_t, jnp.array([t]), subkey)
+            score_slic = eqx.filter_jit(model.score)(x_t, jnp.array([t]), subkey)
 
-            score_gaussian_mag = jnp.sqrt(
-                jnp.sum((x_t / (0.2**2 + sigma_t**2)) ** 2)
-            )  # jnp.sqrt(x_t.flatten().shape[0])
-            score_slic_mag = jnp.sqrt(jnp.sum((score_slic) ** 2,axis=(1,2)))
+            # This commented block is for testing against the Gaussian score
+            # score_gaussian_mag = jnp.sqrt(
+            #     jnp.sum((x_t / (0.2**2 + sigma_t**2)) ** 2)
+            # )
+            # score_slic_mag = jnp.sqrt(jnp.sum((score_slic) ** 2))
+            # score_ratio.append(score_slic_mag / score_gaussian_mag)
 
-            score_ratio.append(jnp.mean(score_slic_mag / score_gaussian_mag))
+            data_dimension = jnp.sqrt(x_t.flatten().shape[0])
+            output_norm = jnp.linalg.norm(score_slic/sigma_t)
+            diagnostic.append(output_norm / data_dimension)
+
 
         t_set = np.array(t_set)
-        score_ratio = np.array(score_ratio)
+        diagnostic = np.array(diagnostic)
 
         fig = plt.figure()
-        plt.plot(t_set, score_ratio)
+        plt.plot(t_set, diagnostic)
         plt.ylim(0.5, 1.5)
         wandb.log({"score_ratio": fig})
