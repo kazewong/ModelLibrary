@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "Add a short description here"
 authors = [{name = "Kaze Wong", email = "kazewong.physics@gmail.com"}]
 requires-python = ">= 3.11"
-dependencies = []
+dependencies = ["black"]
 
 [build-system]
 requires = ["setuptools"]
