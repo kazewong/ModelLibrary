@@ -150,10 +150,14 @@ packages:
   name: bluejay-llm
   version: 0.1.0
   path: .
-  sha256: 74ce87240563105219e3d0fe3a3ce52d17bc9641950a3d02a4fd7235b9e7a4f1
+  sha256: 0e52bacc4a67e0a8773e4f76435627ea57864ee8ed66635a10baac0d7b75ca03
   requires_dist:
   - black
   - jax[cuda12]
+  - ipython
+  - numpy
+  - scipy
+  - torch
   requires_python: '>=3.11'
   editable: true
 - kind: conda
