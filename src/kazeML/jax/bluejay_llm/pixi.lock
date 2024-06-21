@@ -11,6 +11,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/linux-64/_openmp_mutex-4.5-2_gnu.tar.bz2
       - conda: https://conda.anaconda.org/conda-forge/linux-64/bzip2-1.0.8-hd590300_5.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/ca-certificates-2024.6.2-hbcca054_0.conda
+      - conda: https://conda.anaconda.org/conda-forge/noarch/fire-0.6.0-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/ld_impl_linux-64-2.40-hf3520f5_7.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/libexpat-2.6.2-h59595ed_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/libffi-3.4.2-h7f98852_5.tar.bz2
@@ -25,6 +26,8 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/linux-64/openssl-3.3.1-h4ab18f5_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/python-3.12.4-h194c7f8_0_cpython.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/readline-8.2-h8228510_1.conda
+      - conda: https://conda.anaconda.org/conda-forge/noarch/six-1.16.0-pyh6c4a22f_0.tar.bz2
+      - conda: https://conda.anaconda.org/conda-forge/noarch/termcolor-2.4.0-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/tk-8.6.13-noxft_h4845f30_101.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/tzdata-2024a-h0c530f3_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/xz-5.2.6-h166bdaf_0.tar.bz2
@@ -73,7 +76,6 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/2b/27/77f9d5684e6bce929f5cfe18d6cfbe5133013c06cb2fbf5933670e60761d/pure_eval-0.2.2-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/f7/3f/01c8b82017c199075f8f788d0d906b9ffbbc5a47dc9918a945e13d5a2bda/pygments-2.18.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/88/ab/6ecdc526d509d33814835447bbbeedbebdec7cca46ef495a61b00a35b4bf/scipy-1.13.1-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
-      - pypi: https://files.pythonhosted.org/packages/d9/5a/e7c31adbe875f2abbb91bd84cf2dc52d792b5a01506781dbcf25c91daf11/six-1.16.0-py2.py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/f1/7b/ce1eafaf1a76852e2ec9b22edecf1daa58175c090266e9f6c64afcd81d91/stack_data-0.6.3-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/61/53/e18c8c97d0b2724d85c9830477e3ebea3acf1dcdc6deb344d5d9c93a9946/sympy-1.12.1-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/f3/82/68ccd49add4d21937f087871350905ffc709f32c92bf95334e7abf442147/torch-2.3.1-cp312-cp312-manylinux1_x86_64.whl
@@ -150,7 +152,7 @@ packages:
   name: bluejay-llm
   version: 0.1.0
   path: .
-  sha256: 0e52bacc4a67e0a8773e4f76435627ea57864ee8ed66635a10baac0d7b75ca03
+  sha256: 8951441b11f3469db6f328f4dd9639311c4efccd16652015c1ea240d3c2ee2b8
   requires_dist:
   - black
   - jax[cuda12]
@@ -236,6 +238,25 @@ packages:
   - pytest>=7.4.3 ; extra == 'testing'
   - typing-extensions>=4.8 ; python_version < '3.11' and extra == 'typing'
   requires_python: '>=3.8'
+- kind: conda
+  name: fire
+  version: 0.6.0
+  build: pyhd8ed1ab_0
+  subdir: noarch
+  noarch: python
+  url: https://conda.anaconda.org/conda-forge/noarch/fire-0.6.0-pyhd8ed1ab_0.conda
+  sha256: bfc87eb02451144794e441bc58f616bef0a7eb7d0179852ad590a60e1b704371
+  md5: e9ed10aa8fa1dd6782940b95c942a6ae
+  depends:
+  - python >=3.7
+  - six
+  - termcolor
+  license: Apache-2.0
+  license_family: Apache
+  purls:
+  - pkg:pypi/fire?source=conda-forge-mapping
+  size: 85151
+  timestamp: 1710221690085
 - kind: pypi
   name: fsspec
   version: 2024.6.0
@@ -1070,12 +1091,23 @@ packages:
   - doit>=0.36.0 ; extra == 'dev'
   - pydevtool ; extra == 'dev'
   requires_python: '>=3.9'
-- kind: pypi
+- kind: conda
   name: six
   version: 1.16.0
-  url: https://files.pythonhosted.org/packages/d9/5a/e7c31adbe875f2abbb91bd84cf2dc52d792b5a01506781dbcf25c91daf11/six-1.16.0-py2.py3-none-any.whl
-  sha256: 8abb2f1d86890a2dfb989f9a77cfcfd3e47c2a354b01111771326f8aa26e0254
-  requires_python: '>=2.7,!=3.0.*,!=3.1.*,!=3.2.*'
+  build: pyh6c4a22f_0
+  subdir: noarch
+  noarch: python
+  url: https://conda.anaconda.org/conda-forge/noarch/six-1.16.0-pyh6c4a22f_0.tar.bz2
+  sha256: a85c38227b446f42c5b90d9b642f2c0567880c15d72492d8da074a59c8f91dd6
+  md5: e5f25f8dbc060e9a8d912e432202afc2
+  depends:
+  - python
+  license: MIT
+  license_family: MIT
+  purls:
+  - pkg:pypi/six?source=conda-forge-mapping
+  size: 14259
+  timestamp: 1620240338595
 - kind: pypi
   name: stack-data
   version: 0.6.3
@@ -1098,6 +1130,23 @@ packages:
   requires_dist:
   - mpmath<1.4.0,>=1.1.0
   requires_python: '>=3.8'
+- kind: conda
+  name: termcolor
+  version: 2.4.0
+  build: pyhd8ed1ab_0
+  subdir: noarch
+  noarch: python
+  url: https://conda.anaconda.org/conda-forge/noarch/termcolor-2.4.0-pyhd8ed1ab_0.conda
+  sha256: 59588d41f2c02d599fd6528583013d85bd47d17b1acec11edbb29deadd81fbca
+  md5: a5033708ad9283907c3b1bc1f90d0d0d
+  depends:
+  - python >=3.8
+  license: MIT
+  license_family: MIT
+  purls:
+  - pkg:pypi/termcolor?source=conda-forge-mapping
+  size: 12721
+  timestamp: 1704358124294
 - kind: conda
   name: tk
   version: 8.6.13
