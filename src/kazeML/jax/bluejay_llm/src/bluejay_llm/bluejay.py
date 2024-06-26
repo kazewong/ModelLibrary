@@ -4,6 +4,7 @@ import jax.numpy as jnp
 from jaxtyping import Array, PRNGKeyArray, Float, Bool
 from typing import Union, Literal
 
+
 # This model tries to mirror nanoGPT model from https://github.com/karpathy/nanoGPT/blob/master/model.py
 class CausalSelfAttention(eqx.Module):
 
@@ -74,10 +75,7 @@ class CausalSelfAttention(eqx.Module):
             0, 1
         )  # (n_head, n_seq, -1)
 
-        
-
         # # causal self-attention; Self-attend: (B, nh, T, hs) x (B, nh, hs, T) -> (B, nh, T, T)
-        # if self.flash:
         #     # efficient attention using Flash Attention CUDA kernels
         #     y = torch.nn.functional.scaled_dot_product_attention(
         #         q,
@@ -87,25 +85,13 @@ class CausalSelfAttention(eqx.Module):
         #         dropout_p=self.dropout if self.training else 0,
         #         is_causal=True,
         #     )
-        # else:
-        #     # manual implementation of attention
-        #     att = (q @ k.transpose(-2, -1)) * (1.0 / math.sqrt(k.size(-1)))
-        #     att = att.masked_fill(self.bias[:, :, :T, :T] == 0, float("-inf"))
-        #     att = F.softmax(att, dim=-1)
-        #     att = self.attn_dropout(att)
-        #     y = att @ v  # (B, nh, T, T) x (B, nh, T, hs) -> (B, nh, T, hs)
-        # y = (
-        #     y.transpose(1, 2).contiguous().view(B, T, C)
-        # )  # re-assemble all head outputs side by side
 
         att = (q @ k.swapaxes(-2, -1)) / jnp.sqrt(k.shape[-1])
-        att += -jnp.inf*self.mask[:T,:T]
+        att += -jnp.inf * self.mask[:T, :T]
         att = jax.nn.softmax(att, axis=-1)
         att = self.attn_dropout(att)
         y = att @ v  # (B, nh, T, T) x (B, nh, T, hs) -> (B, nh, T, hs)
-        y = (
-            y.swapaxes(0, 1).view(T, C)
-        )  # re-assemble all head outputs side by side
+        y = y.swapaxes(0, 1).view(T, C)  # re-assemble all head outputs side by side
 
         # output projection
         y = self.resid_dropout(self.c_proj(y))
