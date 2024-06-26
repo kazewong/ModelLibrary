@@ -42,7 +42,7 @@ class CausalSelfAttention(eqx.Module):
         # regularization
         self.attn_dropout = eqx.nn.Dropout(dropout)
         self.resid_dropout = eqx.nn.Dropout(dropout)
-        self.mask = jnp.tril(jnp.ones((block_size, block_size), dtype=bool))
+        self.mask = jnp.invert(jnp.tril(jnp.ones((block_size, block_size), dtype=bool)))
 
         # # flash attention make GPU go brrrrr but support is only in PyTorch >= 2.0
         # self.flash = hasattr(torch.nn.functional, 'scaled_dot_product_attention')
@@ -64,13 +64,13 @@ class CausalSelfAttention(eqx.Module):
 
         # calculate query, key, values for all heads in batch and move head forward to be the batch dim
         q, k, v = jnp.split(self.c_attn(x), self.n_embd, axis=2)
-        k = k.view((T, self.n_head, C // self.n_head)).transpose(
+        k = k.view((T, self.n_head, C // self.n_head)).swapaxes(
             0, 1
         )  # (n_head, n_seq, -1)
-        q = q.view((T, self.n_head, C // self.n_head)).transpose(
+        q = q.view((T, self.n_head, C // self.n_head)).swapaxes(
             0, 1
         )  # (n_head, n_seq, -1)
-        v = v.view((T, self.n_head, C // self.n_head)).transpose(
+        v = v.view((T, self.n_head, C // self.n_head)).swapaxes(
             0, 1
         )  # (n_head, n_seq, -1)
 
@@ -98,13 +98,13 @@ class CausalSelfAttention(eqx.Module):
         #     y.transpose(1, 2).contiguous().view(B, T, C)
         # )  # re-assemble all head outputs side by side
 
-        att = (q @ k.transpose(-2, -1)) * (1.0 / jnp.sqrt(k.shape[-1]))
-        att = att.masked_fill(self.bias[:, :, :T, :T] == 0, float("-inf"))
+        att = (q @ k.swapaxes(-2, -1)) / jnp.sqrt(k.shape[-1])
+        att += -jnp.inf*self.mask[:T,:T]
         att = jax.nn.softmax(att, axis=-1)
         att = self.attn_dropout(att)
         y = att @ v  # (B, nh, T, T) x (B, nh, T, hs) -> (B, nh, T, hs)
         y = (
-            y.transpose(1, 2).contiguous().view(B, T, C)
+            y.swapaxes(0, 1).view(T, C)
         )  # re-assemble all head outputs side by side
 
         # output projection
