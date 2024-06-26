@@ -183,7 +183,7 @@ class ScoreBasedSDE(eqx.Module):
         n_steps: int,
         eps: float = 1e-5,
     ) -> tuple[Array, Array, PRNGKeyArray]:
-        model = eqx.tree_inference(self, value=True)
+        model = eqx.nn.inference_mode(self, value=True)
         key, subkey = jax.random.split(key)
         predictor = jax.jit(EulerMaruyamaPredictor(self.sde, self.score, False)) # TODO makes this generic
         corrector = jax.jit(NoneCorrector(self.sde, self.score, 0, 1))
@@ -208,7 +208,7 @@ class ScoreBasedSDE(eqx.Module):
         n_steps: int,
         eps: float = 1e-3,
     ):
-        model = eqx.tree_inference(self, value=True)
+        model = eqx.nn.inference_mode(self, value=True)
         self.predictor.score = eqx.Partial(model.score, key=jax.random.PRNGKey(0)) # TODO Change this
         self.corrector.score = eqx.Partial(model.score, key=jax.random.PRNGKey(0))
         predictor = self.predictor
@@ -268,7 +268,7 @@ class ScoreBasedSDE(eqx.Module):
             n_steps (int): Number of steps
             eps (float, optional): Epsilon. Defaults to 1e-3.
         """
-        model = eqx.tree_inference(self, value=True)
+        model = eqx.nn.inference_mode(self, value=True)
         conditional_function = eqx.Partial(conditional_function, y=condtional_data)
         self.predictor.score = eqx.Partial(model.score, key=jax.random.PRNGKey(0)) # TODO makes this generic
         self.corrector.score = eqx.Partial(model.score, key=jax.random.PRNGKey(0))
