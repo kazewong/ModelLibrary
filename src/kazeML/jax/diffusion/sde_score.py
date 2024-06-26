@@ -7,7 +7,6 @@ from kazeML.jax.common.Unet import Unet
 from kazeML.jax.diffusion.sde import SDE
 from abc import ABC, abstractmethod
 from tqdm import tqdm
-from tap import Tap
 
 
 class GaussianFourierFeatures(eqx.Module):
