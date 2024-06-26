@@ -4,6 +4,9 @@ import jax.numpy as jnp
 from jaxtyping import Array, PRNGKeyArray, Float
 from typing import Union, Literal
 
+# This model tries to mirror nanoGPT model from https://github.com/karpathy/nanoGPT/blob/master/model.py
+
+
 class CausalSelfAttention(eqx.Module):
 
     c_attn: eqx.nn.Linear
@@ -17,10 +20,6 @@ class CausalSelfAttention(eqx.Module):
     """
     TODO: Add flash attention support
     """
-
-    
-
-    
 
     def __init__(
         self,
@@ -101,9 +100,9 @@ class CausalSelfAttention(eqx.Module):
 
 class MLP(eqx.Module):
 
-    n_embd: int = 768
-    dropout: float = 0.0
-    bias: bool = True
+    c_fc: eqx.nn.Linear
+    c_proj: eqx.nn.Linear
+    dropout: eqx.nn.Dropout
 
     def __init__(
         self,
@@ -117,15 +116,14 @@ class MLP(eqx.Module):
 
         key, key_fc, key_proj = jax.random.split(key, 3)
         self.c_fc = eqx.nn.Linear(n_embd, 4 * n_embd, use_bias=bias, key=key_fc)
-        self.gelu = eqx.nn.Lambda(jax.nn.gelu)
         self.c_proj = eqx.nn.Linear(4 * n_embd, n_embd, use_bias=bias, key=key_proj)
         self.dropout = eqx.nn.Dropout(dropout)
 
-    def forward(self, x):
+    def forward(self, x: Float[Array, "n_seq n_embd"], *, key: PRNGKeyArray) -> Float[Array, "n_seq n_embd"]:
         x = self.c_fc(x)
-        x = self.gelu(x)
+        x = jax.nn.gelu(x)
         x = self.c_proj(x)
-        x = self.dropout(x)
+        x = self.dropout(x, key=key)
         return x
 
 
