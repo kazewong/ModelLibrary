@@ -1,18 +1,17 @@
 import equinox as eqx
 import jax
 import jax.numpy as jnp
-from jaxtyping import Array, PRNGKeyArray, Float
+from jaxtyping import Array, PRNGKeyArray, Float, Bool
 from typing import Union, Literal
 
 # This model tries to mirror nanoGPT model from https://github.com/karpathy/nanoGPT/blob/master/model.py
-
-
 class CausalSelfAttention(eqx.Module):
 
     c_attn: eqx.nn.Linear
     c_proj: eqx.nn.Linear
     attn_dropout: eqx.nn.Dropout
     resid_dropout: eqx.nn.Dropout
+    mask: Bool[Array, "block_size block_size"]
 
     n_head: int = 12
     n_embd: int = 768
@@ -43,6 +42,7 @@ class CausalSelfAttention(eqx.Module):
         # regularization
         self.attn_dropout = eqx.nn.Dropout(dropout)
         self.resid_dropout = eqx.nn.Dropout(dropout)
+        self.mask = jnp.tril(jnp.ones((block_size, block_size), dtype=bool))
 
         # # flash attention make GPU go brrrrr but support is only in PyTorch >= 2.0
         # self.flash = hasattr(torch.nn.functional, 'scaled_dot_product_attention')
@@ -60,40 +60,49 @@ class CausalSelfAttention(eqx.Module):
     def forward(
         self, x: Float[Array, "n_seq n_embd"], key: PRNGKeyArray
     ) -> Float[Array, "n_seq n_embd"]:
-        B, T, C = (
-            x.size()
-        )  # batch size, sequence length, embedding dimensionality (n_embd)
+        T, C = x.shape
 
         # calculate query, key, values for all heads in batch and move head forward to be the batch dim
         q, k, v = jnp.split(self.c_attn(x), self.n_embd, axis=2)
-        k = k.view(B, T, self.n_head, C // self.n_head).transpose(
-            1, 2
-        )  # (B, nh, T, hs)
-        q = q.view(B, T, self.n_head, C // self.n_head).transpose(
-            1, 2
-        )  # (B, nh, T, hs)
-        v = v.view(B, T, self.n_head, C // self.n_head).transpose(
-            1, 2
-        )  # (B, nh, T, hs)
+        k = k.view((T, self.n_head, C // self.n_head)).transpose(
+            0, 1
+        )  # (n_head, n_seq, -1)
+        q = q.view((T, self.n_head, C // self.n_head)).transpose(
+            0, 1
+        )  # (n_head, n_seq, -1)
+        v = v.view((T, self.n_head, C // self.n_head)).transpose(
+            0, 1
+        )  # (n_head, n_seq, -1)
 
-        # causal self-attention; Self-attend: (B, nh, T, hs) x (B, nh, hs, T) -> (B, nh, T, T)
-        if self.flash:
-            # efficient attention using Flash Attention CUDA kernels
-            y = torch.nn.functional.scaled_dot_product_attention(
-                q,
-                k,
-                v,
-                attn_mask=None,
-                dropout_p=self.dropout if self.training else 0,
-                is_causal=True,
-            )
-        else:
-            # manual implementation of attention
-            att = (q @ k.transpose(-2, -1)) * (1.0 / math.sqrt(k.size(-1)))
-            att = att.masked_fill(self.bias[:, :, :T, :T] == 0, float("-inf"))
-            att = F.softmax(att, dim=-1)
-            att = self.attn_dropout(att)
-            y = att @ v  # (B, nh, T, T) x (B, nh, T, hs) -> (B, nh, T, hs)
+        
+
+        # # causal self-attention; Self-attend: (B, nh, T, hs) x (B, nh, hs, T) -> (B, nh, T, T)
+        # if self.flash:
+        #     # efficient attention using Flash Attention CUDA kernels
+        #     y = torch.nn.functional.scaled_dot_product_attention(
+        #         q,
+        #         k,
+        #         v,
+        #         attn_mask=None,
+        #         dropout_p=self.dropout if self.training else 0,
+        #         is_causal=True,
+        #     )
+        # else:
+        #     # manual implementation of attention
+        #     att = (q @ k.transpose(-2, -1)) * (1.0 / math.sqrt(k.size(-1)))
+        #     att = att.masked_fill(self.bias[:, :, :T, :T] == 0, float("-inf"))
+        #     att = F.softmax(att, dim=-1)
+        #     att = self.attn_dropout(att)
+        #     y = att @ v  # (B, nh, T, T) x (B, nh, T, hs) -> (B, nh, T, hs)
+        # y = (
+        #     y.transpose(1, 2).contiguous().view(B, T, C)
+        # )  # re-assemble all head outputs side by side
+
+        att = (q @ k.transpose(-2, -1)) * (1.0 / jnp.sqrt(k.shape[-1]))
+        att = att.masked_fill(self.bias[:, :, :T, :T] == 0, float("-inf"))
+        att = jax.nn.softmax(att, axis=-1)
+        att = self.attn_dropout(att)
+        y = att @ v  # (B, nh, T, T) x (B, nh, T, hs) -> (B, nh, T, hs)
         y = (
             y.transpose(1, 2).contiguous().view(B, T, C)
         )  # re-assemble all head outputs side by side
@@ -163,7 +172,9 @@ class Block(eqx.Module):
         self.ln_2 = eqx.nn.LayerNorm(n_embd, use_bias=bias)
         self.mlp = MLP(n_embd=n_embd, dropout=dropout, bias=bias, key=key_mlp)
 
-    def forward(self, x: Float[Array, "n_seq n_embd"], key: PRNGKeyArray) -> Float[Array, "n_seq n_embd"]:
+    def forward(
+        self, x: Float[Array, "n_seq n_embd"], key: PRNGKeyArray
+    ) -> Float[Array, "n_seq n_embd"]:
         key, key_att, key_mlp = jax.random.split(key, 3)
         x = x + self.attn(self.ln_1(x), key=key_att)
         x = x + self.mlp(self.ln_2(x), key=key_mlp)
