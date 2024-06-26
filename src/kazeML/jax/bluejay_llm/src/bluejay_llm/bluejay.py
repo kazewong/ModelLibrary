@@ -52,6 +52,11 @@ class CausalSelfAttention(eqx.Module):
         #     self.register_buffer("bias", torch.tril(torch.ones(block_size, block_size))
         #                                 .view(1, 1, block_size, block_size))
 
+    def __call__(
+        self, x: Float[Array, "n_seq n_embd"], key: PRNGKeyArray
+    ) -> Float[Array, "n_seq n_embd"]:
+        return self.forward(x, key=key)
+
     def forward(
         self, x: Float[Array, "n_seq n_embd"], key: PRNGKeyArray
     ) -> Float[Array, "n_seq n_embd"]:
@@ -119,6 +124,11 @@ class MLP(eqx.Module):
         self.c_proj = eqx.nn.Linear(4 * n_embd, n_embd, use_bias=bias, key=key_proj)
         self.dropout = eqx.nn.Dropout(dropout)
 
+    def __call__(
+        self, x: Float[Array, "n_seq n_embd"], key: PRNGKeyArray
+    ) -> Float[Array, "n_seq n_embd"]:
+        return self.forward(x, key=key)
+
     def forward(
         self, x: Float[Array, "n_seq n_embd"], *, key: PRNGKeyArray
     ) -> Float[Array, "n_seq n_embd"]:
@@ -142,28 +152,21 @@ class Block(eqx.Module):
         dropout: float = 0.0,
         bias: bool = True,
         *,
-        key:PRNGKeyArray,
+        key: PRNGKeyArray,
     ):
         super().__init__()
         key, key_att, key_mlp = jax.random.split(key, 3)
-        self.ln_1 = eqx.nn.LayerNorm(n_embd, use_bias = bias)
+        self.ln_1 = eqx.nn.LayerNorm(n_embd, use_bias=bias)
         self.attn = CausalSelfAttention(
-            n_embd = n_embd,
-            dropout = dropout,
-            bias = bias,
-            key = key_att
+            n_embd=n_embd, dropout=dropout, bias=bias, key=key_att
         )
-        self.ln_2 = eqx.nn.LayerNorm(n_embd, use_bias = bias)
-        self.mlp = MLP(
-            n_embd = n_embd,
-            dropout = dropout,
-            bias = bias,
-            key = key_mlp
-        )
+        self.ln_2 = eqx.nn.LayerNorm(n_embd, use_bias=bias)
+        self.mlp = MLP(n_embd=n_embd, dropout=dropout, bias=bias, key=key_mlp)
 
-    def forward(self, x):
-        x = x + self.attn(self.ln_1(x))
-        x = x + self.mlp(self.ln_2(x))
+    def forward(self, x: Float[Array, "n_seq n_embd"], key: PRNGKeyArray) -> Float[Array, "n_seq n_embd"]:
+        key, key_att, key_mlp = jax.random.split(key, 3)
+        x = x + self.attn(self.ln_1(x), key=key_att)
+        x = x + self.mlp(self.ln_2(x), key=key_mlp)
         return x
 
 
