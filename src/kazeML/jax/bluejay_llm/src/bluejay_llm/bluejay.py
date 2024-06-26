@@ -119,7 +119,9 @@ class MLP(eqx.Module):
         self.c_proj = eqx.nn.Linear(4 * n_embd, n_embd, use_bias=bias, key=key_proj)
         self.dropout = eqx.nn.Dropout(dropout)
 
-    def forward(self, x: Float[Array, "n_seq n_embd"], *, key: PRNGKeyArray) -> Float[Array, "n_seq n_embd"]:
+    def forward(
+        self, x: Float[Array, "n_seq n_embd"], *, key: PRNGKeyArray
+    ) -> Float[Array, "n_seq n_embd"]:
         x = self.c_fc(x)
         x = jax.nn.gelu(x)
         x = self.c_proj(x)
@@ -127,14 +129,37 @@ class MLP(eqx.Module):
         return x
 
 
-class Block(nn.Module):
+class Block(eqx.Module):
 
-    def __init__(self, config):
+    ln_: eqx.nn.LayerNorm
+    ln_2: eqx.nn.LayerNorm
+    attn: CausalSelfAttention
+    mlp: MLP
+
+    def __init__(
+        self,
+        n_embd: int = 768,
+        dropout: float = 0.0,
+        bias: bool = True,
+        *,
+        key:PRNGKeyArray,
+    ):
         super().__init__()
-        self.ln_1 = LayerNorm(config.n_embd, bias=config.bias)
-        self.attn = CausalSelfAttention(config)
-        self.ln_2 = LayerNorm(config.n_embd, bias=config.bias)
-        self.mlp = MLP(config)
+        key, key_att, key_mlp = jax.random.split(key, 3)
+        self.ln_1 = eqx.nn.LayerNorm(n_embd, use_bias = bias)
+        self.attn = CausalSelfAttention(
+            n_embd = n_embd,
+            dropout = dropout,
+            bias = bias,
+            key = key_att
+        )
+        self.ln_2 = eqx.nn.LayerNorm(n_embd, use_bias = bias)
+        self.mlp = MLP(
+            n_embd = n_embd,
+            dropout = dropout,
+            bias = bias,
+            key = key_mlp
+        )
 
     def forward(self, x):
         x = x + self.attn(self.ln_1(x))
@@ -142,12 +167,12 @@ class Block(nn.Module):
         return x
 
 
-class GPT(nn.Module):
+class GPT(eqx.Module):
 
     def __init__(self, config):
         super().__init__()
-        assert config.vocab_size is not None
-        assert config.block_size is not None
+        assert vocab_size is not None
+        assert block_size is not None
         self.config = config
 
         self.transformer = nn.ModuleDict(
