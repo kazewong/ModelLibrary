@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "Add a short description here"
 authors = [{name = "Kaze Wong", email = "kazewong.physics@gmail.com"}]
 requires-python = ">= 3.11"
-dependencies = ["black", "jax[cuda12]", "ipython", "numpy", "scipy", "torch"]
+dependencies = ["black", "ipython", "scipy", "torch"]
 
 [tool.pixi.system-requirements]
 linux = "4.18.0"
@@ -20,8 +20,11 @@ platforms = ["linux-64"]
 
 [tool.pixi.pypi-dependencies]
 bluejay_llm = { path = ".", editable = true }
+jax = { version = "*", extras = ["cuda12"]}
 
 [tool.pixi.tasks]
 
 [tool.pixi.dependencies]
 fire = ">=0.6.0,<0.7"
+equinox = ">=0.11.4,<0.12"
+numpy = ">=1.0,<2.0"
