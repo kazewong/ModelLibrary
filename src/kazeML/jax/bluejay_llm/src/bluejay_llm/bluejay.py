@@ -231,15 +231,17 @@ class GPT(eqx.Module):
             self.lm_head.weight
         )  # https://paperswithcode.com/method/weight-tying
 
-        # init all weights
+        # initialize weights
         key, subkey = jax.random.split(key)
-        # apply special scaled init to the residual projections, per GPT-2 paper
-        # for pn, p in self.named_parameters():
-        #     if pn.endswith("c_proj.weight"):
-        #         torch.nn.init.normal_(p, mean=0.0, std=0.02 / math.sqrt(2 * n_layer))
+        new_model = self.init_weights(self, subkey)
+        self.token_embedding = new_model.token_embedding
+        self.position_embedding = new_model.position_embedding
+        self.blocks = new_model.blocks
+        self.layer_norm = new_model.layer_norm
+        self.lm_head = new_model.lm_head
 
-        # # report number of parameters
-        # print("number of parameters: %.2fM" % (self.get_num_params() / 1e6,))
+        # report number of parameters
+        print("number of parameters: %.2fM" % (self.get_num_params() / 1e6,))
 
     def get_num_params(self, non_embedding=True) -> int:
         """
@@ -292,32 +294,32 @@ class GPT(eqx.Module):
         new_model = eqx.tree_at(get_projection, new_model, new_projections)
         return new_model
 
-    # def forward(self, x: Float[Array, "n_seq"], key: PRNGKeyArray) -> Float[Array, "n_seq n_embd"]:
-    #     pos = jnp.arange(0, x.shape[0], dtype=x.dtype)
+    def forward(self, x: Float[Array, "n_seq"], key: PRNGKeyArray) -> Float[Array, "n_seq n_embd"]:
+        pos = jnp.arange(0, x.shape[0], dtype=x.dtype)
 
-    #     # forward the GPT model itself
-    #     tok_emb = self.token_embedding(x)  # token embeddings of shape (b, t, n_embd)
-    #     pos_emb = self.position_embedding(pos)  # position embeddings of shape (t, n_embd)
-    #     x = self.dropout(tok_emb + pos_emb)
-    #     for block in self.blocks:
-    #         key, subkey = jax.random.split(key)
-    #         x = block(x, key=subkey)
-    #     x = self.layer_norm(x)
+        # forward the GPT model itself
+        tok_emb = self.token_embedding(x)  # token embeddings of shape (b, t, n_embd)
+        pos_emb = self.position_embedding(pos)  # position embeddings of shape (t, n_embd)
+        x = self.dropout(tok_emb + pos_emb)
+        for block in self.blocks:
+            key, subkey = jax.random.split(key)
+            x = block(x, key=subkey)
+        x = self.layer_norm(x)
 
-    #     if targets is not None:
-    #         # if we are given some desired targets also calculate the loss
-    #         logits = self.lm_head(x)
-    #         loss = F.cross_entropy(
-    #             logits.view(-1, logits.size(-1)), targets.view(-1), ignore_index=-1
-    #         )
-    #     else:
-    #         # inference-time mini-optimization: only forward the lm_head on the very last position
-    #         logits = self.lm_head(
-    #             x[:, [-1], :]
-    #         )  # note: using list [-1] to preserve the time dim
-    #         loss = None
+        if targets is not None:
+            # if we are given some desired targets also calculate the loss
+            logits = self.lm_head(x)
+            loss = F.cross_entropy(
+                logits.view(-1, logits.size(-1)), targets.view(-1), ignore_index=-1
+            )
+        else:
+            # inference-time mini-optimization: only forward the lm_head on the very last position
+            logits = self.lm_head(
+                x[:, [-1], :]
+            )  # note: using list [-1] to preserve the time dim
+            loss = None
 
-    #     return logits, loss
+        return logits, loss
 
     # def crop_block_size(self, block_size):
     #     # model surgery to decrease the block size if necessary
