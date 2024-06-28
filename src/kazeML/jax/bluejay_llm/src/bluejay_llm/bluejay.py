@@ -243,6 +243,9 @@ class GPT(eqx.Module):
         # report number of parameters
         print("number of parameters: %.2fM" % (self.get_num_params() / 1e6,))
 
+    def __call__(self, x: Float[Array, "n_seq"], key: PRNGKeyArray) -> Float[Array, "n_seq n_embd"]:
+        return self.forward(x, key=key)
+
     def get_num_params(self, non_embedding=True) -> int:
         """
         Return the number of parameters in the model.
@@ -298,14 +301,14 @@ class GPT(eqx.Module):
         pos = jnp.arange(0, x.shape[0], dtype=x.dtype)
 
         # forward the GPT model itself
-        tok_emb = self.token_embedding(x)  # token embeddings of shape (b, t, n_embd)
-        pos_emb = self.position_embedding(pos)  # position embeddings of shape (t, n_embd)
+        tok_emb = jax.vmap(self.token_embedding)(x)  # token embeddings of shape (t, n_embd)
+        pos_emb = jax.vmap(self.position_embedding)(pos)  # position embeddings of shape (t, n_embd)
         x = self.dropout(tok_emb + pos_emb)
         for block in self.blocks:
             key, subkey = jax.random.split(key)
             x = block(x, key=subkey)
-        x = self.layer_norm(x)
-        return self.lm_head(x)
+        x = jax.vmap(self.layer_norm)(x)
+        return jax.vmap(self.lm_head)(x)
 
         # if targets is not None:
         #     # if we are given some desired targets also calculate the loss
