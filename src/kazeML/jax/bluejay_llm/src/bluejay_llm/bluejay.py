@@ -190,6 +190,10 @@ class GPT(eqx.Module):
     layer_norm: eqx.nn.LayerNorm
     lm_head: eqx.nn.Linear
 
+    @property
+    def n_layer(self) -> int:
+        return len(self.blocks)
+
     def __init__(
         self,
         vocab_size: int = 50304,
@@ -229,7 +233,6 @@ class GPT(eqx.Module):
 
         # init all weights
         key, subkey = jax.random.split(key)
-        self = self._init_weights(self, subkey)
         # apply special scaled init to the residual projections, per GPT-2 paper
         # for pn, p in self.named_parameters():
         #     if pn.endswith("c_proj.weight"):
@@ -251,21 +254,26 @@ class GPT(eqx.Module):
             n_params -= self.position_embedding.weight.size
         return n_params
 
-    def _init_weights(self, module: eqx.Module, key: PRNGKeyArray):
+    def init_weights(self, module: eqx.Module, key: PRNGKeyArray):
         is_linear = lambda x: isinstance(x, eqx.nn.Linear)
         is_embedding = lambda x: isinstance(x, eqx.nn.Embedding)
+        is_causal_self_attention = lambda x: isinstance(x, CausalSelfAttention)
         get_weights = lambda m:[
-            x.weight for x in jax.tree.leaves(m) if is_linear(x)
+            x.weight for x in jax.tree.leaves(m, is_leaf=is_linear) if is_linear(x)
         ]
         get_bias = lambda m:[
-            x.bias for x in jax.tree.leaves(m) if is_linear(x)
+            x.bias for x in jax.tree.leaves(m, is_leaf=is_linear) if is_linear(x)
         ]
         get_embedding = lambda m:[
-            x.weight for x in jax.tree.leaves(m) if is_embedding(x)
+            x.weight for x in jax.tree.leaves(m, is_leaf=is_embedding) if is_embedding(x)
+        ]
+        get_projection = lambda m:[
+            x.c_proj.weight for x in jax.tree_leaves(m, is_leaf=is_causal_self_attention) if is_causal_self_attention(x)
         ]
         new_weights = []
         new_biases = []
         new_embeddings = []
+        new_projections = []
         for w in get_weights(module):
             key, subkey = jax.random.split(key)
             new_weights.append(jax.random.normal(subkey, w.shape)*0.02)
@@ -275,9 +283,13 @@ class GPT(eqx.Module):
         for e in get_embedding(module):
             key, subkey = jax.random.split(key)
             new_embeddings.append(jax.random.normal(subkey, e.shape)*0.02)
+        for p in get_projection(module):
+            key, subkey = jax.random.split(key)
+            new_projections.append(jax.random.normal(subkey, p.shape)*0.02/jnp.sqrt(2 * self.n_layer))
         new_model = eqx.tree_at(get_weights, module, new_weights)
         new_model = eqx.tree_at(get_bias, new_model, new_biases)
         new_model = eqx.tree_at(get_embedding, new_model, new_embeddings)
+        new_model = eqx.tree_at(get_projection, new_model, new_projections)
         return new_model
 
     # def forward(self, x: Float[Array, "n_seq"], key: PRNGKeyArray) -> Float[Array, "n_seq n_embd"]:
