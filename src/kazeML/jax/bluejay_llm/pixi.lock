@@ -10,6 +10,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/linux-64/_libgcc_mutex-0.1-conda_forge.tar.bz2
       - conda: https://conda.anaconda.org/conda-forge/linux-64/_openmp_mutex-4.5-2_gnu.tar.bz2
       - conda: https://conda.anaconda.org/conda-forge/noarch/_sysroot_linux-64_curr_repodata_hack-3-h69a702a_14.conda
+      - conda: https://conda.anaconda.org/conda-forge/noarch/absl-py-2.1.0-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/binutils_impl_linux-64-2.40-ha1999f0_7.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/binutils_linux-64-2.40-hb3c18ed_9.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/brotli-python-1.1.0-py312h30efb56_1.conda
@@ -19,6 +20,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/noarch/certifi-2024.6.2-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/cffi-1.16.0-py312hf06ca03_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/charset-normalizer-3.3.2-pyhd8ed1ab_0.conda
+      - conda: https://conda.anaconda.org/conda-forge/noarch/chex-0.1.86-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/cuda-cccl_linux-64-12.5.39-ha770c72_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/cuda-crt-dev_linux-64-12.5.40-ha770c72_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/cuda-crt-tools-12.5.40-ha770c72_0.conda
@@ -95,6 +97,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/linux-64/openssl-3.3.1-h4ab18f5_1.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/opt-einsum-3.3.0-hd8ed1ab_2.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/opt_einsum-3.3.0-pyhc1e730c_2.conda
+      - conda: https://conda.anaconda.org/conda-forge/noarch/optax-0.2.2-pyhd8ed1ab_1.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/pycparser-2.22-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/pysocks-1.7.1-pyha2e5f31_6.tar.bz2
       - conda: https://conda.anaconda.org/conda-forge/linux-64/python-3.12.4-h194c7f8_0_cpython.conda
@@ -109,6 +112,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/noarch/termcolor-2.4.0-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/tiktoken-0.7.0-py312h26f7dfd_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/tk-8.6.13-noxft_h4845f30_101.conda
+      - conda: https://conda.anaconda.org/conda-forge/noarch/toolz-0.12.1-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/typeguard-2.13.3-pyhd8ed1ab_0.tar.bz2
       - conda: https://conda.anaconda.org/conda-forge/noarch/typing-extensions-4.12.2-hd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/typing_extensions-4.12.2-pyha770c72_0.conda
@@ -207,6 +211,23 @@ packages:
   purls: []
   size: 21169
   timestamp: 1708000801681
+- kind: conda
+  name: absl-py
+  version: 2.1.0
+  build: pyhd8ed1ab_0
+  subdir: noarch
+  noarch: python
+  url: https://conda.anaconda.org/conda-forge/noarch/absl-py-2.1.0-pyhd8ed1ab_0.conda
+  sha256: 6c84575fe0c3a860c7b6a52cb36dc548c838503c8da0f950a63a64c29b443937
+  md5: 035d1d58677c13ec93122d9eb6b8803b
+  depends:
+  - python >=3.7
+  license: Apache-2.0
+  license_family: Apache
+  purls:
+  - pkg:pypi/absl-py?source=conda-forge-mapping
+  size: 107266
+  timestamp: 1705494755555
 - kind: pypi
   name: asttokens
   version: 2.4.1
@@ -278,7 +299,7 @@ packages:
   name: bluejay-llm
   version: 0.1.0
   path: .
-  sha256: 071bc5d8a5fe45fe8a1f01e2617a7a68fc74d23cc24c210a627cdfed5b4bd88a
+  sha256: eb7a175da0a02fc682c0b62a774d7d806f3f334ae458efa5bcb91af7db11e59a
   requires_dist:
   - black
   - ipython
@@ -404,6 +425,29 @@ packages:
   - pkg:pypi/charset-normalizer?source=conda-forge-mapping
   size: 46597
   timestamp: 1698833765762
+- kind: conda
+  name: chex
+  version: 0.1.86
+  build: pyhd8ed1ab_0
+  subdir: noarch
+  noarch: python
+  url: https://conda.anaconda.org/conda-forge/noarch/chex-0.1.86-pyhd8ed1ab_0.conda
+  sha256: a95341e3131c7d9ad06188e0b5b8da3aa63214689bad5c7a0685c21800dacf26
+  md5: a07f390c9f7e17295521faf5385e136f
+  depends:
+  - absl-py >=0.9.0
+  - jax >=0.4.16
+  - jaxlib >=0.1.37
+  - numpy >=1.24.1
+  - python >=3.9
+  - toolz >=0.9.0
+  - typing-extensions >=4.2.0
+  license: Apache-2.0
+  license_family: APACHE
+  purls:
+  - pkg:pypi/chex?source=conda-forge-mapping
+  size: 77788
+  timestamp: 1710851026888
 - kind: pypi
   name: click
   version: 8.1.7
@@ -2197,6 +2241,30 @@ packages:
   - pkg:pypi/opt-einsum?source=conda-forge-mapping
   size: 58004
   timestamp: 1696449058916
+- kind: conda
+  name: optax
+  version: 0.2.2
+  build: pyhd8ed1ab_1
+  build_number: 1
+  subdir: noarch
+  noarch: python
+  url: https://conda.anaconda.org/conda-forge/noarch/optax-0.2.2-pyhd8ed1ab_1.conda
+  sha256: 68ab5cd076de8d3ec6971a78bd3786a129a2c0d172a0fc66776b36d28b54f5f8
+  md5: dd370641d3610ed329ae747f0eae09c8
+  depends:
+  - absl-py >=0.7.1
+  - chex >=0.1.86
+  - jax >=0.1.55
+  - jaxlib >=0.1.37
+  - numpy >=1.18.0
+  - python >=3.9
+  - typing_extensions >=3.10
+  license: Apache-2.0
+  license_family: APACHE
+  purls:
+  - pkg:pypi/optax?source=conda-forge-mapping
+  size: 145268
+  timestamp: 1718550769933
 - kind: pypi
   name: packaging
   version: '24.1'
@@ -2570,6 +2638,23 @@ packages:
   purls: []
   size: 3318875
   timestamp: 1699202167581
+- kind: conda
+  name: toolz
+  version: 0.12.1
+  build: pyhd8ed1ab_0
+  subdir: noarch
+  noarch: python
+  url: https://conda.anaconda.org/conda-forge/noarch/toolz-0.12.1-pyhd8ed1ab_0.conda
+  sha256: 22b0a9790317526e08609d5dfdd828210ae89e6d444a9e954855fc29012e90c6
+  md5: 2fcb582444635e2c402e8569bb94e039
+  depends:
+  - python >=3.7
+  license: BSD-3-Clause
+  license_family: BSD
+  purls:
+  - pkg:pypi/toolz?source=conda-forge-mapping
+  size: 52358
+  timestamp: 1706112720607
 - kind: pypi
   name: torch
   version: 2.3.1
