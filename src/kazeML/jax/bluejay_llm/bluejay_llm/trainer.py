@@ -1,5 +1,5 @@
-from kazeML.jax.bluejay_llm.bluejay_llm.bluejay import GPT
-from kazeML.jax.bluejay_llm.bluejay_llm.dataloader import ThePileDataset
+from bluejay_llm.bluejay import GPT
+from bluejay_llm.dataloader import ThePileDataset
 
 import jax
 import jax.numpy as jnp
@@ -14,8 +14,13 @@ import torch
 
 class BlueJayTrainer:
 
+    test: int
+
     def __init__(self) -> None:
         pass
+
+    def train(self):
+        print(1)
 
 if __name__ == "__main__":
     fire.Fire(BlueJayTrainer)
