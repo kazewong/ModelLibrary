@@ -4,8 +4,8 @@ import numpy as np
 class ThePileDataset(Dataset):
     def __init__(self, path: str, max_length: int = 1024):
         self.max_length = max_length
-        data = np.memmap(path, dtype=np.int16, mode="r")
-        self.data = torch.tensor(data, dtype=torch.int16)
+        data = np.memmap(path, dtype=np.uint16, mode="r")
+        self.data = torch.tensor(data, dtype=torch.int32)
 
     def __len__(self):
         return len(self.data)
