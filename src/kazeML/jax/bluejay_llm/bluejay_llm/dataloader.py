@@ -8,9 +8,9 @@ class ThePileDataset(Dataset):
         self.max_length = max_length
         data = np.memmap(path, dtype=np.uint16, mode="r")
         self.data = torch.tensor(data, dtype=torch.int32)
-
+        
     def __len__(self):
-        return len(self.data)
+        return len(self.data)-self.max_length
 
-    def __getitem__(self, index: int) -> torch.Tensor:
-        return self.data[index]
+    def __getitem__(self, index: int) -> tuple[torch.Tensor, torch.Tensor]:
+        return self.data[index:index+self.max_length], self.data[index+1:index+self.max_length+1]

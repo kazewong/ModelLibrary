@@ -1,7 +1,7 @@
 from bluejay_llm.bluejay import GPT
 from bluejay_llm.dataloader import ThePileDataset
 
-from jaxtyping import PRNGKeyArray, PyTree, Float, Array
+from jaxtyping import PRNGKeyArray, PyTree, Float, Array, Int
 import jax
 import jax.numpy as jnp
 import optax
@@ -10,9 +10,10 @@ import numpy as np
 import wandb
 import matplotlib.pyplot as plt
 from tap import Tap
+from jax.experimental.multihost_utils import process_allgather
 
 import torch
-from torch.utils.data import DataLoader, random_split
+from torch.utils.data import DataLoader, random_split, BatchSampler, SequentialSampler
 from torch.utils.data.distributed import DistributedSampler
 
 from typing import Literal
@@ -30,7 +31,13 @@ class BlueJayExperimentParser(Tap):
     # Training hyperparameters
     n_epochs: int = 10
     batch_size: int = 8
-    learning_rate: float = 3e-4
+    start_learning_rate: float = 6e-4
+    end_learning_rate: float = 6e-5
+    warmup_steps: int = 2000
+    decay_steps: int = 600000
+    beta1: float = 0.9
+    beta2: float = 0.95
+    weight_decay: float = 0.1
     seed: int = 1029741092480
     num_workers: int = 8
     prefetch_factor: int = 2
@@ -81,20 +88,28 @@ class BlueJayTrainer:
 
         print("Creating dataloaders")
 
-        train_sampler = DistributedSampler(
-            train_set,
-            num_replicas=n_processes,
-            rank=jax.process_index(),
-            shuffle=True,
-            seed=config.seed,
-        )
-        test_sampler = DistributedSampler(
-            test_set,
-            num_replicas=n_processes,
-            rank=jax.process_index(),
-            shuffle=False,
-            seed=config.seed,
-        )
+        if config.distributed:
+            train_sampler = DistributedSampler(
+                train_set,
+                num_replicas=n_processes,
+                rank=jax.process_index(),
+                shuffle=True,
+                seed=config.seed,
+            )
+            test_sampler = DistributedSampler(
+                test_set,
+                num_replicas=n_processes,
+                rank=jax.process_index(),
+                shuffle=False,
+                seed=config.seed,
+            )
+        else:
+            train_sampler = BatchSampler(
+                SequentialSampler(train_set), batch_size=config.batch_size, drop_last=True
+            )
+            test_sampler = BatchSampler(
+                SequentialSampler(test_set), batch_size=config.batch_size, drop_last=True
+            )
         self.train_loader = DataLoader(
             train_set,
             batch_size=config.batch_size,
@@ -125,9 +140,21 @@ class BlueJayTrainer:
             config.bias,
             key=subkey,
         )
-        learning_rate = config.learning_rate
+        scheduler = optax.warmup_cosine_decay_schedule(
+            init_value=config.start_learning_rate,
+            peak_value=config.start_learning_rate,
+            warmup_steps=config.warmup_steps,
+            decay_steps=config.decay_steps,
+            end_value=config.end_learning_rate,
+        )
         self.optimizer = optax.chain(
-            optax.adamw(learning_rate), optax.clip_by_global_norm(1.0)
+            optax.adamw(
+                scheduler,
+                b1=config.beta1,
+                b2=config.beta2,
+                weight_decay=config.weight_decay,
+            ),
+            optax.clip_by_global_norm(1.0),
         )
         self.opt_state = self.optimizer.init(eqx.filter(self.model, eqx.is_array))
 
@@ -164,15 +191,29 @@ class BlueJayTrainer:
                     wandb.log({"test_loss": loss})
 
     @staticmethod
+    @eqx.filter_jit
     def run_step(
         model: GPT,
         opt_state: PyTree,
-        batch: Float[Array, "batch 1 datashape"],
+        input: Float[Array, "batch n_seq"],
+        target: Int[Array, "batch n_seq"],
         key: PRNGKeyArray,
         opt_update,
         train: bool = True,
-    ):
-        pass
+    )-> tuple[GPT, PyTree, Array|float]:
+        keys = jax.random.split(key, input.shape[0])
+        single_device_loss = lambda model, input, target, keys: optax.softmax_cross_entropy_with_integer_labels(jax.vmap(model)(input, keys), target)
+        if train:
+            loss_values, grads = eqx.filter_value_and_grad(single_device_loss)(
+                model, input, target, keys
+            )
+            updates, opt_state = opt_update(grads, opt_state, model)
+            model = eqx.apply_updates(model, updates)
+            return model, opt_state, jnp.mean(loss_values)
+        else:
+            loss_values = single_device_loss(model, input, target, keys)
+            return model, opt_state, jnp.mean(loss_values)
+
 
     def run_epoch(
         self,
@@ -184,4 +225,46 @@ class BlueJayTrainer:
         log_loss: bool = False,
         train: bool = True,
     ) -> tuple[GPT, PyTree, Array | float]:
-        return model, opt_state, 0.0
+        data_loader.sampler.set_epoch(epoch) # type: ignore
+        loss = 0.0
+        if self.config.distributed:
+            for batch in data_loader:
+                key, subkey = jax.random.split(key)
+                local_input = jnp.array(batch[0])
+                local_target = jnp.array(batch[1])
+                
+                global_shape = (
+                    jax.process_count() * local_input.shape[0],
+                ) + local_input.shape[1:]
+
+                batch_input = jax.device_put(
+                    jnp.split(local_input, len(self.global_mesh.local_devices), axis=0),
+                    self.global_mesh.local_devices,
+                )
+                batch_target = jax.device_put(
+                    jnp.split(local_target, len(self.global_mesh.local_devices), axis=0),
+                    self.global_mesh.local_devices,
+                )
+
+                global_input = jax.make_array_from_single_device_arrays(
+                    global_shape, self.sharding, batch_input
+                )
+                global_target = jax.make_array_from_single_device_arrays(
+                    global_shape, self.sharding, batch_target
+                )
+
+                model, opt_state, loss_values = self.run_step(
+                    model,
+                    opt_state,
+                    global_input,
+                    global_target,
+                    subkey,
+                    self.optimizer.update,
+                    train=train,
+                )
+                if log_loss:
+                    loss += jnp.sum(process_allgather(loss_values))
+        else:
+            for batch in data_loader:
+                pass
+        return model, opt_state, loss
