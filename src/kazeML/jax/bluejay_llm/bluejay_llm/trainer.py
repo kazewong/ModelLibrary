@@ -33,7 +33,6 @@ class BlueJayExperimentParser(Tap):
     learning_rate: float = 3e-4
     seed: int = 1029741092480
     num_workers: int = 8
-    train_test_ratio: float = 0.8
     prefetch_factor: int = 2
 
     # Logging hyperparameters
@@ -59,14 +58,16 @@ class BigParser(BlueJayExperimentParser, BlueJayModelParser):
 
 class BlueJayTrainer:
 
-    def __init__(self, dataset: ThePileDataset, config: BigParser) -> None:
+    def __init__(
+        self, train_set: ThePileDataset, test_set: ThePileDataset, config: BigParser
+    ) -> None:
         self.config = config
-        if self.config.logging and jax.process_index() == 0:
-            wandb.init(
-                project=self.config.project_name,
-                name=self.config.experiment_name,
-                config=config.as_dict(),
-            )
+        # if self.config.logging and jax.process_index() == 0:
+        #     wandb.init(
+        #         project=self.config.project_name,
+        #         name=self.config.experiment_name,
+        #         config=config.as_dict(),
+        #     )
 
         n_processes = jax.process_count()
         devices = np.array(jax.devices())
@@ -78,9 +79,7 @@ class BlueJayTrainer:
             ),
         )
 
-        train_set, test_set = random_split(
-            dataset, [config.train_test_ratio, 1 - config.train_test_ratio]
-        )
+        print("Creating dataloaders")
 
         train_sampler = DistributedSampler(
             train_set,
@@ -113,6 +112,8 @@ class BlueJayTrainer:
             pin_memory=False,
         )
 
+        print("Creating model and optimizer")
+
         self.key, subkey = jax.random.split(jax.random.PRNGKey(config.seed))
 
         self.model = GPT(
@@ -131,7 +132,36 @@ class BlueJayTrainer:
         self.opt_state = self.optimizer.init(eqx.filter(self.model, eqx.is_array))
 
     def train(self):
-        pass
+        if jax.process_index() == 0:
+            print("Start training")
+
+        for epoch in range(self.config.n_epochs):
+            self.model, self.opt_state, loss = self.run_epoch(
+                self.model,
+                self.opt_state,
+                self.train_loader,
+                self.key,
+                epoch,
+                log_loss=True,
+                train=True,
+            )
+
+            if self.config.logging and jax.process_index() == 0:
+                wandb.log({"train_loss": loss})
+
+            if epoch % self.config.log_epoch == 0:
+                self.model, _, loss = self.run_epoch(
+                    self.model,
+                    self.opt_state,
+                    self.test_loader,
+                    self.key,
+                    epoch,
+                    log_loss=True,
+                    train=False,
+                )
+
+                if self.config.logging and jax.process_index() == 0:
+                    wandb.log({"test_loss": loss})
 
     @staticmethod
     def run_step(
