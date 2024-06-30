@@ -17,7 +17,7 @@ if __name__ == "__main__":
 
     data_path = args.data_path
     train_set = ThePileDataset(data_path+'/train.bin')
-    test_set = ThePileDataset(data_path+'/test.bin')
+    test_set = ThePileDataset(data_path+'/valid.bin')
 
     n_processes = jax.process_count()
     if jax.process_index() == 0:
