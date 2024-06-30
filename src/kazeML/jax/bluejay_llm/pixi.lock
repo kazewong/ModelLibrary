@@ -55,9 +55,9 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/noarch/cycler-0.12.1-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/dbus-1.13.6-h5008d03_3.tar.bz2
       - conda: https://conda.anaconda.org/conda-forge/noarch/docker-pycreds-0.4.0-py_0.tar.bz2
+      - conda: https://conda.anaconda.org/conda-forge/noarch/docstring_parser-0.16-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/equinox-0.11.4-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/expat-2.6.2-h59595ed_0.conda
-      - conda: https://conda.anaconda.org/conda-forge/noarch/fire-0.6.0-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/font-ttf-dejavu-sans-mono-2.37-hab24e00_0.tar.bz2
       - conda: https://conda.anaconda.org/conda-forge/noarch/font-ttf-inconsolata-3.000-h77eed37_0.tar.bz2
       - conda: https://conda.anaconda.org/conda-forge/noarch/font-ttf-source-code-pro-2.038-h77eed37_0.tar.bz2
@@ -168,6 +168,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/linux-64/ml_dtypes-0.4.0-py312h1d6d2e6_1.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/mpg123-1.32.6-h59595ed_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/munkres-1.1.4-pyh9f0ad1d_0.tar.bz2
+      - conda: https://conda.anaconda.org/conda-forge/noarch/mypy_extensions-1.0.0-pyha770c72_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/mysql-common-8.3.0-hf1915f5_4.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/mysql-libs-8.3.0-hca2cd23_4.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/nccl-2.22.3.1-hbc370b7_0.conda
@@ -212,16 +213,17 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/noarch/six-1.16.0-pyh6c4a22f_0.tar.bz2
       - conda: https://conda.anaconda.org/conda-forge/noarch/smmap-5.0.0-pyhd8ed1ab_0.tar.bz2
       - conda: https://conda.anaconda.org/conda-forge/noarch/sysroot_linux-64-2.28-he073ed8_2.conda
-      - conda: https://conda.anaconda.org/conda-forge/noarch/termcolor-2.4.0-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/tiktoken-0.7.0-py312h26f7dfd_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/tk-8.6.13-noxft_h4845f30_101.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/toml-0.10.2-pyhd8ed1ab_0.tar.bz2
       - conda: https://conda.anaconda.org/conda-forge/noarch/tomli-2.0.1-pyhd8ed1ab_0.tar.bz2
       - conda: https://conda.anaconda.org/conda-forge/noarch/toolz-0.12.1-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/tornado-6.4.1-py312h9a8786e_0.conda
+      - conda: https://conda.anaconda.org/conda-forge/noarch/typed-argument-parser-1.10.0-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/typeguard-2.13.3-pyhd8ed1ab_0.tar.bz2
       - conda: https://conda.anaconda.org/conda-forge/noarch/typing-extensions-4.12.2-hd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/typing_extensions-4.12.2-pyha770c72_0.conda
+      - conda: https://conda.anaconda.org/conda-forge/noarch/typing_inspect-0.9.0-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/tzdata-2024a-h0c530f3_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/urllib3-2.2.2-pyhd8ed1ab_1.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/wandb-0.16.6-pyhd8ed1ab_0.conda
@@ -261,7 +263,6 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/0a/0d/2454f072fae3b5a137c119abf15465d1771319dfe9e4acbb31722a0fff91/MarkupSafe-2.1.5-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/8f/8e/9ad090d3553c280a8060fbf6e24dc1c0c29704ee7d1c372f0c174aa59285/matplotlib_inline-0.1.7-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/43/e3/7d92a15f894aa0c9c4b49b8ee9ac9850d6e63b03c9c32c0367a13ae62209/mpmath-1.3.0-py3-none-any.whl
-      - pypi: https://files.pythonhosted.org/packages/2a/e2/5d3f6ada4297caebe1a2add3b126fe800c96f56dbe5d1988a2cbe0b267aa/mypy_extensions-1.0.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/38/e9/5f72929373e1a0e8d142a130f3f97e6ff920070f87f91c4e13e40e0fba5a/networkx-3.3-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/37/6d/121efd7382d5b0284239f4ab1fc1590d86d34ed4a4a2fdb13b30ca8e5740/nvidia_cublas_cu12-12.1.3.1-py3-none-manylinux1_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/7e/00/6b218edd739ecfc60524e585ba8e6b00554dd908de2c9c66c1af3e44e18d/nvidia_cuda_cupti_cu12-12.1.105-py3-none-manylinux1_x86_64.whl
@@ -472,7 +473,7 @@ packages:
   name: bluejay-llm
   version: 0.1.0
   path: .
-  sha256: e64b9457a6dc5af4c1544a310a0989a00f3423674303cd7236cbef18d1033921
+  sha256: dce4a86b6ad2886012dcef3df6fae01f36b7d8fb48d21962668d14094bef287c
   requires_dist:
   - black
   - ipython
@@ -1186,6 +1187,23 @@ packages:
   size: 11445
   timestamp: 1551105257829
 - kind: conda
+  name: docstring_parser
+  version: '0.16'
+  build: pyhd8ed1ab_0
+  subdir: noarch
+  noarch: python
+  url: https://conda.anaconda.org/conda-forge/noarch/docstring_parser-0.16-pyhd8ed1ab_0.conda
+  sha256: da4fcb232504392344a2ddae6863cbbbbf2a876ddd6d00c8f1dfcdefc29f7f2a
+  md5: 1541834779ec03de593eb3c35f393632
+  depends:
+  - python >=3.6
+  license: MIT
+  license_family: MIT
+  purls:
+  - pkg:pypi/docstring-parser?source=conda-forge-mapping
+  size: 30771
+  timestamp: 1710508017985
+- kind: conda
   name: equinox
   version: 0.11.4
   build: pyhd8ed1ab_0
@@ -1255,25 +1273,6 @@ packages:
   - virtualenv>=20.26.2 ; extra == 'testing'
   - typing-extensions>=4.8 ; python_version < '3.11' and extra == 'typing'
   requires_python: '>=3.8'
-- kind: conda
-  name: fire
-  version: 0.6.0
-  build: pyhd8ed1ab_0
-  subdir: noarch
-  noarch: python
-  url: https://conda.anaconda.org/conda-forge/noarch/fire-0.6.0-pyhd8ed1ab_0.conda
-  sha256: bfc87eb02451144794e441bc58f616bef0a7eb7d0179852ad590a60e1b704371
-  md5: e9ed10aa8fa1dd6782940b95c942a6ae
-  depends:
-  - python >=3.7
-  - six
-  - termcolor
-  license: Apache-2.0
-  license_family: Apache
-  purls:
-  - pkg:pypi/fire?source=conda-forge-mapping
-  size: 85151
-  timestamp: 1710221690085
 - kind: conda
   name: font-ttf-dejavu-sans-mono
   version: '2.37'
@@ -3524,12 +3523,23 @@ packages:
   - pkg:pypi/munkres?source=conda-forge-mapping
   size: 12452
   timestamp: 1600387789153
-- kind: pypi
-  name: mypy-extensions
+- kind: conda
+  name: mypy_extensions
   version: 1.0.0
-  url: https://files.pythonhosted.org/packages/2a/e2/5d3f6ada4297caebe1a2add3b126fe800c96f56dbe5d1988a2cbe0b267aa/mypy_extensions-1.0.0-py3-none-any.whl
-  sha256: 4392f6c0eb8a5668a69e23d168ffa70f0be9ccfd32b5cc2d26a34ae5b844552d
-  requires_python: '>=3.5'
+  build: pyha770c72_0
+  subdir: noarch
+  noarch: python
+  url: https://conda.anaconda.org/conda-forge/noarch/mypy_extensions-1.0.0-pyha770c72_0.conda
+  sha256: f240217476e148e825420c6bc3a0c0efb08c0718b7042fae960400c02af858a3
+  md5: 4eccaeba205f0aed9ac3a9ea58568ca3
+  depends:
+  - python >=3.5
+  license: MIT
+  license_family: MIT
+  purls:
+  - pkg:pypi/mypy-extensions?source=conda-forge-mapping
+  size: 10492
+  timestamp: 1675543414256
 - kind: conda
   name: mysql-common
   version: 8.3.0
@@ -4627,23 +4637,6 @@ packages:
   size: 26421592
   timestamp: 1711086612058
 - kind: conda
-  name: termcolor
-  version: 2.4.0
-  build: pyhd8ed1ab_0
-  subdir: noarch
-  noarch: python
-  url: https://conda.anaconda.org/conda-forge/noarch/termcolor-2.4.0-pyhd8ed1ab_0.conda
-  sha256: 59588d41f2c02d599fd6528583013d85bd47d17b1acec11edbb29deadd81fbca
-  md5: a5033708ad9283907c3b1bc1f90d0d0d
-  depends:
-  - python >=3.8
-  license: MIT
-  license_family: MIT
-  purls:
-  - pkg:pypi/termcolor?source=conda-forge-mapping
-  size: 12721
-  timestamp: 1704358124294
-- kind: conda
   name: tiktoken
   version: 0.7.0
   build: py312h26f7dfd_0
@@ -4795,6 +4788,25 @@ packages:
   - pytest<8.2,>=7.0 ; extra == 'test'
   requires_python: '>=3.8'
 - kind: conda
+  name: typed-argument-parser
+  version: 1.10.0
+  build: pyhd8ed1ab_0
+  subdir: noarch
+  noarch: python
+  url: https://conda.anaconda.org/conda-forge/noarch/typed-argument-parser-1.10.0-pyhd8ed1ab_0.conda
+  sha256: 2641269d5f76c5c657577c15785d3fb70de6688128dc3ae421cda067ba72ccc6
+  md5: 6f7002703f62b7006cd3ce1503d2b875
+  depends:
+  - docstring_parser >=0.15
+  - python >=3.8
+  - typing_inspect >=0.7.1
+  license: MIT
+  license_family: MIT
+  purls:
+  - pkg:pypi/typed-argument-parser?source=conda-forge-mapping
+  size: 32880
+  timestamp: 1712819285714
+- kind: conda
   name: typeguard
   version: 2.13.3
   build: pyhd8ed1ab_0
@@ -4844,6 +4856,25 @@ packages:
   - pkg:pypi/typing-extensions?source=conda-forge-mapping
   size: 39888
   timestamp: 1717802653893
+- kind: conda
+  name: typing_inspect
+  version: 0.9.0
+  build: pyhd8ed1ab_0
+  subdir: noarch
+  noarch: python
+  url: https://conda.anaconda.org/conda-forge/noarch/typing_inspect-0.9.0-pyhd8ed1ab_0.conda
+  sha256: 16e0b825c138e14ebc84623248d91d93a8cff29bb93595cc4aa46ca32f24f1de
+  md5: 9e924b76b91908a17e28a19a0ab88687
+  depends:
+  - mypy_extensions >=0.3.0
+  - python >=3.5
+  - typing_extensions >=3.7.4
+  license: MIT
+  license_family: MIT
+  purls:
+  - pkg:pypi/typing-inspect?source=conda-forge-mapping
+  size: 14906
+  timestamp: 1685820229594
 - kind: conda
   name: tzdata
   version: 2024a

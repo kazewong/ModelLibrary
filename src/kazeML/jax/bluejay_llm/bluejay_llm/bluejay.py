@@ -196,7 +196,7 @@ class GPT(eqx.Module):
 
     def __init__(
         self,
-        vocab_size: int = 50304,
+        vocab_size: int = 50257,
         block_size: int = 1024,
         n_layer: int = 12,
         n_embd: int = 768,
