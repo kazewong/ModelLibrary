@@ -69,12 +69,12 @@ class BlueJayTrainer:
         self, train_set: ThePileDataset, test_set: ThePileDataset, config: BigParser
     ) -> None:
         self.config = config
-        # if self.config.logging and jax.process_index() == 0:
-        #     wandb.init(
-        #         project=self.config.project_name,
-        #         name=self.config.experiment_name,
-        #         config=config.as_dict(),
-        #     )
+        if self.config.logging and jax.process_index() == 0:
+            wandb.init(
+                project=self.config.project_name,
+                name=self.config.experiment_name,
+                config=config.as_dict(),
+            )
 
         n_processes = jax.process_count()
         devices = np.array(jax.devices())
@@ -274,6 +274,8 @@ class BlueJayTrainer:
                     self.optimizer.update,
                     train=train,
                 )
+                if log_loss:
+                    loss += jnp.sum(process_allgather(loss_values))
         else:
             for batch in data_loader:
                 key, subkey = jax.random.split(key)
