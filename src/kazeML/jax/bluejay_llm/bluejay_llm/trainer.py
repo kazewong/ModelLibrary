@@ -105,10 +105,14 @@ class BlueJayTrainer:
             )
         else:
             train_sampler = BatchSampler(
-                SequentialSampler(train_set), batch_size=config.batch_size, drop_last=True
+                SequentialSampler(train_set),
+                batch_size=config.batch_size,
+                drop_last=True,
             )
             test_sampler = BatchSampler(
-                SequentialSampler(test_set), batch_size=config.batch_size, drop_last=True
+                SequentialSampler(test_set),
+                batch_size=config.batch_size,
+                drop_last=True,
             )
         self.train_loader = DataLoader(
             train_set,
@@ -163,6 +167,7 @@ class BlueJayTrainer:
             print("Start training")
 
         for epoch in range(self.config.n_epochs):
+            print(f"Starting epoch {epoch}")
             self.model, self.opt_state, loss = self.run_epoch(
                 self.model,
                 self.opt_state,
@@ -200,20 +205,23 @@ class BlueJayTrainer:
         key: PRNGKeyArray,
         opt_update,
         train: bool = True,
-    )-> tuple[GPT, PyTree, Array|float]:
+    ) -> tuple[GPT, PyTree, Array | float]:
         keys = jax.random.split(key, input.shape[0])
-        single_device_loss = lambda model, input, target, keys: optax.softmax_cross_entropy_with_integer_labels(jax.vmap(model)(input, keys), target)
+        single_device_loss = lambda model, input, target, keys: jnp.mean(
+            optax.softmax_cross_entropy_with_integer_labels(
+                jax.vmap(model)(input, keys), target
+            )
+        )
         if train:
             loss_values, grads = eqx.filter_value_and_grad(single_device_loss)(
                 model, input, target, keys
             )
             updates, opt_state = opt_update(grads, opt_state, model)
             model = eqx.apply_updates(model, updates)
-            return model, opt_state, jnp.mean(loss_values)
+            return model, opt_state, loss_values
         else:
             loss_values = single_device_loss(model, input, target, keys)
-            return model, opt_state, jnp.mean(loss_values)
-
+            return model, opt_state, loss_values
 
     def run_epoch(
         self,
@@ -225,14 +233,16 @@ class BlueJayTrainer:
         log_loss: bool = False,
         train: bool = True,
     ) -> tuple[GPT, PyTree, Array | float]:
-        data_loader.sampler.set_epoch(epoch) # type: ignore
+        data_loader.sampler.set_epoch(epoch)  # type: ignore
         loss = 0.0
+        print("Starting epoch")
         if self.config.distributed:
             for batch in data_loader:
                 key, subkey = jax.random.split(key)
+
                 local_input = jnp.array(batch[0])
                 local_target = jnp.array(batch[1])
-                
+
                 global_shape = (
                     jax.process_count() * local_input.shape[0],
                 ) + local_input.shape[1:]
@@ -242,7 +252,9 @@ class BlueJayTrainer:
                     self.global_mesh.local_devices,
                 )
                 batch_target = jax.device_put(
-                    jnp.split(local_target, len(self.global_mesh.local_devices), axis=0),
+                    jnp.split(
+                        local_target, len(self.global_mesh.local_devices), axis=0
+                    ),
                     self.global_mesh.local_devices,
                 )
 
@@ -262,9 +274,20 @@ class BlueJayTrainer:
                     self.optimizer.update,
                     train=train,
                 )
-                if log_loss:
-                    loss += jnp.sum(process_allgather(loss_values))
         else:
             for batch in data_loader:
-                pass
+                key, subkey = jax.random.split(key)
+                input = jnp.array(batch[0])
+                target = jnp.array(batch[1])
+                model, opt_state, loss_values = self.run_step(
+                    model,
+                    opt_state,
+                    input,
+                    target,
+                    subkey,
+                    self.optimizer.update,
+                    train=train,
+                )
+                if log_loss:
+                    loss += loss_values
         return model, opt_state, loss

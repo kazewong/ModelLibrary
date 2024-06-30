@@ -27,7 +27,7 @@ if __name__ == "__main__":
         with open(args.output_path + "/args.json", "w") as file:
             output_dict = args.as_dict()
             json.dump(output_dict, file, indent=4)
-        # trainer.train()
+        trainer.train()
     else:
         trainer = BlueJayTrainer(train_set, test_set, args)
-        # trainer.train()
+        trainer.train()
