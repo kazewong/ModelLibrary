@@ -133,6 +133,15 @@ class MLP(eqx.Module):
         x = self.c_proj(x)
         x = self.dropout(x, key=key)
         return x
+    
+    def forward_fsdp(
+        self, x: Float[Array, "n_seq n_embd"], *, key: PRNGKeyArray
+    ) -> Float[Array, "n_seq n_embd"]:
+        x = self.c_fc(x)
+        x = jax.nn.gelu(x)
+        x = self.c_proj(x)
+        x = self.dropout(x, key=key)
+        return x
 
 
 class Block(eqx.Module):

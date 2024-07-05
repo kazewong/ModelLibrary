@@ -7,28 +7,28 @@ import jax
 import jax.numpy as jnp
 jax.config.update('jax_platform_name', 'cpu')
 
-from jax.sharding import Mesh, NamedSharding, PartitionSpec as P
-from jax.experimental import mesh_utils
-from jax.experimental.shard_map import shard_map
+
+from bluejay_llm.bluejay import Block
 
 import equinox as eqx
 
-model = eqx.nn.Linear(784, 8, key=jax.random.PRNGKey(0))
+from jax.sharding import Mesh, NamedSharding, PartitionSpec as P
+from jax.experimental import mesh_utils
+from jax.experimental.shard_map import shard_map
+from jax.experimental.multihost_utils import process_allgather
+
+
+model = Block(key=jax.random.PRNGKey(0))
 
 devices = mesh_utils.create_device_mesh((8,))
 mesh = Mesh(devices, ('batch',))
 
 data = jnp.ones((8*1000, 784))
 data_sharded = jax.device_put(data, NamedSharding(mesh, P('batch', )))
-model_sharded = jax.device_put(model, NamedSharding(mesh, P('batch', )))
+array, statics = eqx.partition(model, eqx.is_array)
+array = jax.device_put(array, NamedSharding(mesh, P('batch', )))
+model_sharded = eqx.combine(array, statics)
 
-@jax.jit
-@partial(shard_map, mesh=mesh, in_specs=(P('batch'), P('batch')), out_specs=P('batch'))
-def linear_fsdp(model, x):
-    # return jax.vmap(model)(x)
-    return jax.lax.all_gather(jax.vmap(model)(x), 'batch', tiled=True, axis=1)
-
-c = linear_fsdp(model_sharded, data_sharded)
-d = jax.vmap(model)(data)
-
-print(jnp.allclose(c, d))
+# @jax.jit
+# @partial(shard_map, mesh=mesh, in_specs=(P('batch'), P('batch')), out_specs=P('batch'))
+# def linear_fsdp(model, x):
