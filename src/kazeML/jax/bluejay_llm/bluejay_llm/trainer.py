@@ -12,7 +12,6 @@ import matplotlib.pyplot as plt
 from tap import Tap
 from jax.experimental.multihost_utils import process_allgather
 
-import torch
 from torch.utils.data import DataLoader, BatchSampler, SequentialSampler
 
 from typing import Literal
@@ -42,7 +41,7 @@ class BlueJayExperimentParser(Tap):
     prefetch_factor: int = 2
 
     # Logging hyperparameters
-    logging: bool = True
+    logging: bool = False
     log_epoch: int = 2
     log_t_step: int = 10
     output_path: str = "./experiment"
@@ -68,12 +67,12 @@ class BlueJayTrainer:
         self, train_set: ThePileDataset, test_set: ThePileDataset, config: BigParser
     ) -> None:
         self.config = config
-        if self.config.logging and jax.process_index() == 0:
-            wandb.init(
-                project=self.config.project_name,
-                name=self.config.experiment_name,
-                config=config.as_dict(),
-            )
+        # if self.config.logging and jax.process_index() == 0:
+        #     wandb.init(
+        #         project=self.config.project_name,
+        #         name=self.config.experiment_name,
+        #         config=config.as_dict(),
+        #     )
 
         n_processes = jax.process_count()
         devices = np.array(jax.devices())
@@ -232,7 +231,7 @@ class BlueJayTrainer:
         log_loss: bool = False,
         train: bool = True,
     ) -> tuple[GPT, PyTree, Array | float]:
-        data_loader.sampler.set_epoch(epoch)  # type: ignore
+        # data_loader.sampler.set_epoch(epoch)  # type: ignore
         loss = 0.0
         print("Starting epoch")
         if self.config.distributed:
