@@ -116,7 +116,7 @@ class BlueJayTrainer:
             train_set,
             batch_size=config.batch_size,
             num_workers=config.num_workers,
-            sampler=train_sampler,
+            # sampler=train_sampler,
             prefetch_factor=config.prefetch_factor,
             pin_memory=False,
         )
@@ -124,7 +124,7 @@ class BlueJayTrainer:
             test_set,
             batch_size=config.batch_size,
             num_workers=config.num_workers,
-            sampler=test_sampler,
+            # sampler=test_sampler,
             prefetch_factor=config.prefetch_factor,
             pin_memory=False,
         )
