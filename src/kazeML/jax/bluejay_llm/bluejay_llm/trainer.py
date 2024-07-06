@@ -88,32 +88,32 @@ class BlueJayTrainer:
 
         print("Creating dataloaders")
 
-        if config.distributed:
-            train_sampler = DistributedSampler(
-                train_set,
-                num_replicas=n_processes,
-                rank=jax.process_index(),
-                shuffle=True,
-                seed=config.seed,
-            )
-            test_sampler = DistributedSampler(
-                test_set,
-                num_replicas=n_processes,
-                rank=jax.process_index(),
-                shuffle=False,
-                seed=config.seed,
-            )
-        else:
-            train_sampler = BatchSampler(
-                SequentialSampler(train_set),
-                batch_size=config.batch_size,
-                drop_last=True,
-            )
-            test_sampler = BatchSampler(
-                SequentialSampler(test_set),
-                batch_size=config.batch_size,
-                drop_last=True,
-            )
+        # if config.distributed:
+        #     train_sampler = DistributedSampler(
+        #         train_set,
+        #         num_replicas=n_processes,
+        #         rank=jax.process_index(),
+        #         shuffle=False,
+        #         seed=config.seed,
+        #     )
+        #     test_sampler = DistributedSampler(
+        #         test_set,
+        #         num_replicas=n_processes,
+        #         rank=jax.process_index(),
+        #         shuffle=False,
+        #         seed=config.seed,
+        #     )
+        # else:
+        train_sampler = BatchSampler(
+            SequentialSampler(train_set),
+            batch_size=config.batch_size,
+            drop_last=True,
+        )
+        test_sampler = BatchSampler(
+            SequentialSampler(test_set),
+            batch_size=config.batch_size,
+            drop_last=True,
+        )
         self.train_loader = DataLoader(
             train_set,
             batch_size=config.batch_size,
