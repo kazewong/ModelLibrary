@@ -23,7 +23,7 @@ model = Block(key=jax.random.PRNGKey(0))
 devices = mesh_utils.create_device_mesh((8,))
 mesh = Mesh(devices, ('batch',))
 
-data = jnp.ones((8*1000, 784))
+data = jnp.ones((8*1000, 768))
 data_sharded = jax.device_put(data, NamedSharding(mesh, P('batch', )))
 array, statics = eqx.partition(model, eqx.is_array)
 array = jax.device_put(array, NamedSharding(mesh, P('batch', )))

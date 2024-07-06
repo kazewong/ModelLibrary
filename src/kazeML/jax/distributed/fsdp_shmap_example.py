@@ -18,15 +18,20 @@ model = eqx.nn.Linear(784, 8, key=jax.random.PRNGKey(0))
 devices = mesh_utils.create_device_mesh((8,))
 mesh = Mesh(devices, ('batch',))
 
-data = jnp.ones((8*1000, 784))
+data = jnp.ones((784))
 data_sharded = jax.device_put(data, NamedSharding(mesh, P('batch', )))
-model_sharded = jax.device_put(model, NamedSharding(mesh, P('batch', )))
+arrays, statics = eqx.partition(model, lambda x: eqx.is_array(x) and x.ndim == 2)
+arrays = jax.device_put(arrays, NamedSharding(mesh, P(None, 'batch')))
+model_sharded = eqx.combine(arrays, statics)
+arrays, statics = eqx.partition(model_sharded, lambda x: eqx.is_array(x) and x.ndim == 1)
+arrays = jax.device_put(arrays, NamedSharding(mesh, P('batch')))
+model_sharded = eqx.combine(arrays, statics)
 
 @jax.jit
-@partial(shard_map, mesh=mesh, in_specs=(P('batch'), P('batch')), out_specs=P('batch'))
+@partial(shard_map, mesh=mesh, in_specs=(P(None), P('batch')), out_specs=P('batch'))
 def linear_fsdp(model, x):
-    # return jax.vmap(model)(x)
-    return jax.lax.all_gather(jax.vmap(model)(x), 'batch', tiled=True, axis=1)
+    return model(x)
+    # return jax.lax.all_gather(model(x), 'batch', tiled=True, axis=0)
 
 c = linear_fsdp(model_sharded, data_sharded)
 d = jax.vmap(model)(data)

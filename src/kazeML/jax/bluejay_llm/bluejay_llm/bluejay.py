@@ -76,17 +76,6 @@ class CausalSelfAttention(eqx.Module):
             0, 1
         )  # (n_head, n_seq, -1)
 
-        # # causal self-attention; Self-attend: (B, nh, T, hs) x (B, nh, hs, T) -> (B, nh, T, T)
-        #     # efficient attention using Flash Attention CUDA kernels
-        #     y = torch.nn.functional.scaled_dot_product_attention(
-        #         q,
-        #         k,
-        #         v,
-        #         attn_mask=None,
-        #         dropout_p=self.dropout if self.training else 0,
-        #         is_causal=True,
-        #     )
-
         att = (q @ k.swapaxes(-2, -1)) / jnp.sqrt(k.shape[-1])
         att +=  self.mask[:T, :T]
         att = jax.nn.softmax(att, axis=-1)
@@ -134,6 +123,7 @@ class MLP(eqx.Module):
         x = self.dropout(x, key=key)
         return x
     
+    @staticmethod
     def forward_fsdp(
         self, x: Float[Array, "n_seq n_embd"], *, key: PRNGKeyArray
     ) -> Float[Array, "n_seq n_embd"]:
