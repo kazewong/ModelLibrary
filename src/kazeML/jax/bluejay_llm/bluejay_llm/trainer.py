@@ -13,8 +13,7 @@ from tap import Tap
 from jax.experimental.multihost_utils import process_allgather
 
 import torch
-from torch.utils.data import DataLoader, random_split, BatchSampler, SequentialSampler
-from torch.utils.data.distributed import DistributedSampler
+from torch.utils.data import DataLoader, BatchSampler, SequentialSampler
 
 from typing import Literal
 

@@ -16,8 +16,8 @@ if __name__ == "__main__":
             print("Total number of process: " + str(jax.process_count()))
 
     data_path = args.data_path
-    train_set = ThePileDataset(data_path+'/train.bin')
-    test_set = ThePileDataset(data_path+'/valid.bin')
+    train_set = ThePileDataset(data_path+'/train.bin', process_id=jax.process_index(), num_processes=jax.process_count())
+    test_set = ThePileDataset(data_path+'/valid.bin', process_id=jax.process_index(), num_processes=jax.process_count())
 
     n_processes = jax.process_count()
     if jax.process_index() == 0:
