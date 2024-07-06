@@ -14,6 +14,5 @@ class ThePileDataset(Dataset):
     def __len__(self):
         return (len(self.data)-self.max_length)//self.max_length
 
-    def __getitem__(self, index: list[int]) -> tuple[torch.Tensor, torch.Tensor]:
-        index = torch.tensor(index)*self.max_length
+    def __getitem__(self, index: int) -> tuple[torch.Tensor, torch.Tensor]:
         return self.data[index:index+self.max_length], self.data[index+1:index+self.max_length+1]

@@ -102,16 +102,16 @@ class BlueJayTrainer:
         #         seed=config.seed,
         #     )
         # else:
-        train_sampler = BatchSampler(
-            SequentialSampler(train_set),
-            batch_size=config.batch_size,
-            drop_last=True,
-        )
-        test_sampler = BatchSampler(
-            SequentialSampler(test_set),
-            batch_size=config.batch_size,
-            drop_last=True,
-        )
+        # train_sampler = BatchSampler(
+        #     SequentialSampler(train_set),
+        #     batch_size=config.batch_size,
+        #     drop_last=True,
+        # )
+        # test_sampler = BatchSampler(
+        #     SequentialSampler(test_set),
+        #     batch_size=config.batch_size,
+        #     drop_last=True,
+        # )
         self.train_loader = DataLoader(
             train_set,
             batch_size=config.batch_size,
