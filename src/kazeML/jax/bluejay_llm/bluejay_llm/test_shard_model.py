@@ -90,6 +90,7 @@ if __name__ == "__main__":
     model = eqx.filter_eval_shape(GPT, key=subkey)
     dtype = model.lm_head.weight.dtype
 
+    # Initialize blocks
     arrays, statics = eqx.partition(model.blocks, lambda x: isinstance(x, eqx.nn.Linear), is_leaf = lambda x: isinstance(x, eqx.nn.Linear))
     linears = jax.tree.leaves(arrays, is_leaf=lambda x: isinstance(x, eqx.nn.Linear))
     new_layers = []
@@ -99,8 +100,19 @@ if __name__ == "__main__":
     
     new_arrays = eqx.tree_at(lambda x: jax.tree.leaves(x, is_leaf=lambda x: isinstance(x, eqx.nn.Linear)), arrays, new_layers)
     new_blocks = eqx.combine(new_arrays, statics, is_leaf=lambda x: isinstance(x, eqx.nn.Linear))
+
+    arrays, statics = eqx.partition(new_blocks, lambda x: isinstance(x, jax._src.api.ShapeDtypeStruct))
+    masks = jax.tree.leaves(arrays)
+    new_mask = []
+    for i in masks:
+        mask = -jnp.inf * jnp.invert(jnp.tril(jnp.ones((model.block_size, model.block_size), dtype=bool)))
+        mask = jnp.nan_to_num(mask, posinf=jnp.inf, neginf=-jnp.inf)
+        new_mask.append(mask)
+    new_arrays = eqx.tree_at(lambda x: jax.tree.leaves(x), arrays, new_mask)
+    new_blocks = eqx.combine(new_arrays, statics)
     model = eqx.tree_at(lambda x: x.blocks, model, new_blocks)
 
+    # Initialize layer norms
     arrays, statics = eqx.partition(model, lambda x: isinstance(x, eqx.nn.LayerNorm), is_leaf = lambda x: isinstance(x, eqx.nn.LayerNorm))
     layerNorms = jax.tree.leaves(arrays, is_leaf=lambda x: isinstance(x, eqx.nn.LayerNorm))
     new_layers = []
@@ -109,9 +121,14 @@ if __name__ == "__main__":
     new_arrays = eqx.tree_at(lambda x: jax.tree.leaves(x, is_leaf=lambda x: isinstance(x, eqx.nn.LayerNorm)), arrays, new_layers)
     model = eqx.combine(new_arrays, statics, is_leaf=lambda x: isinstance(x, eqx.nn.LayerNorm))
 
+    # Initialize embedding
     key, subkey = jax.random.split(key)
     model = eqx.tree_at(lambda x: x.token_embedding, model, eqx.nn.Embedding(model.vocab_size, model.n_embed, key=subkey))
     model = eqx.tree_at(lambda x: x.position_embedding, model, eqx.nn.Embedding(model.block_size, model.n_embed, key=subkey))
+
+    # Initialize lm_head
+    key, subkey = jax.random.split(key)
+    model = eqx.tree_at(lambda x: x.lm_head, model, eqx.nn.Linear(model.n_embed, model.vocab_size, key=subkey))
 
     data_local = jnp.ones(1024).astype(jnp.int32)
 
