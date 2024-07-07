@@ -74,25 +74,18 @@ if __name__ == "__main__":
     new_arrays = eqx.tree_at(lambda x: jax.tree.leaves(x, is_leaf=lambda x: isinstance(x, eqx.nn.Linear)), arrays, new_layers)
 
     new_blocks = eqx.combine(new_arrays, statics, is_leaf=lambda x: isinstance(x, eqx.nn.Linear))
-    # lim = 1 / math.sqrt(model.in_features)
 
-    # key, subkey = jax.random.split(key)
-    # weight = init_shard_parameters(key, model.weight.shape, dtype, lim, mesh, sharding, n_processes, 0)
+    
 
-    # key, subkey = jax.random.split(key)
-    # bias = init_shard_parameters(key, model.bias.shape, dtype, lim, mesh, sharding, n_processes, 0)
+    model = eqx.tree_at(lambda x: x.blocks, model, new_blocks)
 
-    # model = eqx.tree_at(lambda m: m.weight, model, weight)
-    # model = eqx.tree_at(lambda m: m.bias, model, bias)
+    print(model.blocks[0].mlp.c_fc.weight.devices())
 
-    # This requests 192GB of RAMs, and it should fail on a single process
-    # model = eqx.nn.Linear(1000, 1_000_000*24, key = jax.random.PRNGKey(0))
+    data_local = jnp.ones(1024)
 
-    # data_local = jnp.ones(1000)
+    f = eqx.filter_jit(model)
+    result = f(data_local, key = jax.random.PRNGKey(0))
 
-    # f = eqx.filter_jit(model)
-    # result = f(data_local)
-
-    # print(result.devices())
+    print(result.devices())
     # value = process_allgather(result)
     # print(value)
