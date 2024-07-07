@@ -42,6 +42,32 @@ def init_shard_linear(
 
     return model
 
+def init_shard_layer_norm(
+        model: eqx.nn.LayerNorm, mesh: jax.sharding.Mesh, sharding: jax.sharding.Sharding, n_devices: int = 1
+):
+
+    sharded_length = model.shape[0]//n_devices
+    sharded_shape = (sharded_length,)
+    per_device_weight = jax.device_put(
+        jnp.split(jnp.ones(sharded_shape), len(mesh.local_devices), axis=0),
+        mesh.local_devices,
+    )
+    per_device_bias = jax.device_put(
+        jnp.split(jnp.zeros(sharded_shape), len(mesh.local_devices), axis=0),
+        mesh.local_devices,
+    )
+    weight = jax.make_array_from_single_device_arrays(
+        model.shape, sharding, per_device_weight
+    )
+    bias = jax.make_array_from_single_device_arrays(
+        model.shape, sharding, per_device_bias
+    )
+
+    model = eqx.tree_at(lambda m: m.weight, model, weight)
+    model = eqx.tree_at(lambda m: m.bias, model, bias)
+
+    return model
+
 if __name__ == "__main__":
     initialize()
     if jax.process_index() == 0:
@@ -72,16 +98,22 @@ if __name__ == "__main__":
         new_layers.append(init_shard_linear(subkey, i, mesh, sharding, n_processes))
     
     new_arrays = eqx.tree_at(lambda x: jax.tree.leaves(x, is_leaf=lambda x: isinstance(x, eqx.nn.Linear)), arrays, new_layers)
-
     new_blocks = eqx.combine(new_arrays, statics, is_leaf=lambda x: isinstance(x, eqx.nn.Linear))
-
-    
-
     model = eqx.tree_at(lambda x: x.blocks, model, new_blocks)
 
-    print(model.blocks[0].mlp.c_fc.weight.devices())
+    arrays, statics = eqx.partition(model, lambda x: isinstance(x, eqx.nn.LayerNorm), is_leaf = lambda x: isinstance(x, eqx.nn.LayerNorm))
+    layerNorms = jax.tree.leaves(arrays, is_leaf=lambda x: isinstance(x, eqx.nn.LayerNorm))
+    new_layers = []
+    for i in layerNorms:
+        new_layers.append(init_shard_layer_norm(i, mesh, sharding, n_processes))
+    new_arrays = eqx.tree_at(lambda x: jax.tree.leaves(x, is_leaf=lambda x: isinstance(x, eqx.nn.LayerNorm)), arrays, new_layers)
+    model = eqx.combine(new_arrays, statics, is_leaf=lambda x: isinstance(x, eqx.nn.LayerNorm))
 
-    data_local = jnp.ones(1024)
+    key, subkey = jax.random.split(key)
+    model = eqx.tree_at(lambda x: x.token_embedding, model, eqx.nn.Embedding(model.vocab_size, model.n_embed, key=subkey))
+    model = eqx.tree_at(lambda x: x.position_embedding, model, eqx.nn.Embedding(model.block_size, model.n_embed, key=subkey))
+
+    data_local = jnp.ones(1024).astype(jnp.int32)
 
     f = eqx.filter_jit(model)
     result = f(data_local, key = jax.random.PRNGKey(0))

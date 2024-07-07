@@ -183,6 +183,18 @@ class GPT(eqx.Module):
     def n_layer(self) -> int:
         return len(self.blocks)
 
+    @property
+    def vocab_size(self) -> int:
+        return self.token_embedding.num_embeddings
+
+    @property
+    def n_embed(self) -> int:
+        return self.token_embedding.embedding_size
+
+    @property
+    def block_size(self) -> int:
+        return self.position_embedding.num_embeddings
+
     def __init__(
         self,
         vocab_size: int = 50257,
