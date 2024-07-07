@@ -1,5 +1,5 @@
 import math
-from typing import Any, Literal, Union
+from typing import Any
 import numpy as np
 
 import jax
@@ -7,11 +7,9 @@ import jax.numpy as jnp
 from jax._src.distributed import initialize
 from jaxtyping import PRNGKeyArray
 import equinox as eqx
-from equinox._misc import default_floating_dtype
 
-from jax.experimental.multihost_utils import process_allgather
 
-def default_init(
+def init_shard_parameters(
     key: PRNGKeyArray, shape: tuple[int, ...], dtype: Any, lim: float, mesh: jax.sharding.Mesh, sharding: jax.sharding.Sharding, n_devices: int = 1, shard_axis: int = 0
 ) -> jax.Array:
     sharded_length = shape[shard_axis]//n_devices
@@ -27,34 +25,6 @@ def default_init(
         shape, sharding, per_device_array
     )
 
-
-class Linear_shard(eqx.nn.Linear):
-    def __init__(
-        self,
-        in_features: Union[int, Literal["scalar"]],
-        out_features: Union[int, Literal["scalar"]],
-        mesh: jax.sharding.Mesh,
-        sharding: jax.sharding.Sharding,
-        shard_axis: int = 0,
-        n_devices: int = 1,
-        use_bias: bool = True,
-        dtype=None,        
-        *,
-        key: PRNGKeyArray,
-    ):
-        dtype = default_floating_dtype() if dtype is None else dtype
-        wkey, bkey = jax.random.split(key, 2)
-        in_features_ = 1 if in_features == "scalar" else in_features
-        out_features_ = 1 if out_features == "scalar" else out_features
-        lim = 1 / math.sqrt(in_features_)
-        wshape = (out_features_, in_features_)
-        self.weight = default_init(wkey, wshape, dtype, lim, mesh, sharding, n_devices, shard_axis)
-        bshape = (out_features_,)
-        self.bias = default_init(bkey, bshape, dtype, lim, mesh, sharding, n_devices, shard_axis) if use_bias else None
-
-        self.in_features = in_features
-        self.out_features = out_features
-        self.use_bias = use_bias
 
 
 if __name__ == "__main__":
@@ -72,17 +42,31 @@ if __name__ == "__main__":
         )
     )
 
+    key = jax.random.PRNGKey(10293801)
+    key, subkey = jax.random.split(key)
+
     # This shards the model across N process, so 5 40GBs GPUs should be able to host it
-    model = Linear_shard(1000, 1_000_000*24, mesh=mesh, sharding=sharding, n_devices=n_processes, key = jax.random.PRNGKey(0))
+    model = eqx.filter_eval_shape(eqx.nn.Linear, in_features=1_000, out_features=1_000_000*24, key=subkey)
+    dtype = model.weight.dtype
+    lim = 1 / math.sqrt(model.in_features)
+
+    key, subkey = jax.random.split(key)
+    weight = init_shard_parameters(key, model.weight.shape, dtype, lim, mesh, sharding, n_processes, 0)
+
+    key, subkey = jax.random.split(key)
+    bias = init_shard_parameters(key, model.bias.shape, dtype, lim, mesh, sharding, n_processes, 0)
+
+    model = eqx.tree_at(lambda m: m.weight, model, weight)
+    model = eqx.tree_at(lambda m: m.bias, model, bias)
 
     # This requests 192GB of RAMs, and it should fail on a single process
     # model = eqx.nn.Linear(1000, 1_000_000*24, key = jax.random.PRNGKey(0))
 
-    # data_local = jnp.ones(24)
+    data_local = jnp.ones(1000)
 
-    # f = eqx.filter_jit(model)
-    # result = f(data_local)
+    f = eqx.filter_jit(model)
+    result = f(data_local)
 
-    # print(result.devices())
+    print(result.devices())
     # value = process_allgather(result)
     # print(value)
