@@ -230,7 +230,8 @@ class GPT(eqx.Module):
         self.lm_head = new_model.lm_head
 
         # report number of parameters
-        print("number of parameters: %.2fM" % (self.get_num_params() / 1e6,))
+        if jax.process_index() == 0:
+            print("number of parameters: %.2fM" % (self.get_num_params() / 1e6,))
 
     def __call__(self, x: Float[Array, "n_seq"], key: PRNGKeyArray) -> Float[Array, "n_seq n_embd"]:
         return self.forward(x, key=key)

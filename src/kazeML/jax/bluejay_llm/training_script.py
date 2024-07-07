@@ -1,7 +1,6 @@
 import jax
 from jax._src.distributed import initialize
 from bluejay_llm.dataloader import ThePileDataset
-import numpy as np
 import json
 import os
 from bluejay_llm.trainer import BigParser, BlueJayTrainer

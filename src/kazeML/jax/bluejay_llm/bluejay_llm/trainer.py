@@ -8,13 +8,13 @@ import optax
 import equinox as eqx
 import numpy as np
 import wandb
-import matplotlib.pyplot as plt
 from tap import Tap
 from jax.experimental.multihost_utils import process_allgather
 
-from torch.utils.data import DataLoader, BatchSampler, SequentialSampler
+from torch.utils.data import DataLoader
 
 from typing import Literal
+import tqdm
 
 
 class BlueJayExperimentParser(Tap):
@@ -84,7 +84,8 @@ class BlueJayTrainer:
             ),
         )
 
-        print("Creating dataloaders")
+        if jax.process_index() == 0:
+            print("Creating dataloaders")
 
         # if config.distributed:
         #     train_sampler = DistributedSampler(
@@ -129,11 +130,12 @@ class BlueJayTrainer:
             pin_memory=False,
         )
 
-        print("Creating model and optimizer")
+        if jax.process_index() == 0:
+            print("Creating model and optimizer")
 
         self.key, subkey = jax.random.split(jax.random.PRNGKey(config.seed))
 
-        self.model = GPT(
+        model = GPT(
             config.vocab_size,
             config.block_size,
             config.n_layer,
@@ -142,6 +144,13 @@ class BlueJayTrainer:
             config.bias,
             key=subkey,
         )
+
+        arrays, statics = eqx.partition(
+            model.blocks, eqx.is_array
+        )
+        arrays = jax.device_put(arrays, self.sharding)
+        self.model = eqx.combine(arrays, statics)
+
         scheduler = optax.warmup_cosine_decay_schedule(
             init_value=config.start_learning_rate,
             peak_value=config.start_learning_rate,
@@ -165,7 +174,8 @@ class BlueJayTrainer:
             print("Start training")
 
         for epoch in range(self.config.n_epochs):
-            print(f"Starting epoch {epoch}")
+            if jax.process_index() == 0:
+                print(f"Starting epoch {epoch}")
             self.model, self.opt_state, loss = self.run_epoch(
                 self.model,
                 self.opt_state,
@@ -233,9 +243,12 @@ class BlueJayTrainer:
     ) -> tuple[GPT, PyTree, Array | float]:
         # data_loader.sampler.set_epoch(epoch)  # type: ignore
         loss = 0.0
-        print("Starting epoch")
         if self.config.distributed:
-            for batch in data_loader:
+            if jax.process_index() == 0:
+                pbar = tqdm.tqdm(data_loader)
+            else:
+                pbar = data_loader
+            for batch_id, batch in enumerate(pbar):
                 key, subkey = jax.random.split(key)
 
                 local_input = jnp.array(batch[0])
