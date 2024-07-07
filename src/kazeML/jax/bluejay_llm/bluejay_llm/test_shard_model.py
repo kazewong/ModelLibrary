@@ -8,6 +8,7 @@ from jax._src.distributed import initialize
 from jaxtyping import PRNGKeyArray
 import equinox as eqx
 
+from bluejay_llm.bluejay import GPT
 
 def init_shard_parameters(
     key: PRNGKeyArray, shape: tuple[int, ...], dtype: Any, lim: float, mesh: jax.sharding.Mesh, sharding: jax.sharding.Sharding, n_devices: int = 1, shard_axis: int = 0
@@ -25,7 +26,21 @@ def init_shard_parameters(
         shape, sharding, per_device_array
     )
 
+def init_shard_linear(
+        key: PRNGKeyArray, model: eqx.nn.Linear, mesh: jax.sharding.Mesh, sharding: jax.sharding.Sharding, n_devices: int = 1, shard_axis: int = 0
+):
+    lim = 1 / math.sqrt(model.in_features)
 
+    key, subkey = jax.random.split(key)
+    weight = init_shard_parameters(subkey, model.weight.shape, dtype, lim, mesh, sharding, n_devices, shard_axis)
+
+    key, subkey = jax.random.split(key)
+    bias = init_shard_parameters(subkey, model.bias.shape, dtype, lim, mesh, sharding, n_devices, shard_axis)
+
+    model = eqx.tree_at(lambda m: m.weight, model, weight)
+    model = eqx.tree_at(lambda m: m.bias, model, bias)
+
+    return model
 
 if __name__ == "__main__":
     initialize()
@@ -46,27 +61,38 @@ if __name__ == "__main__":
     key, subkey = jax.random.split(key)
 
     # This shards the model across N process, so 5 40GBs GPUs should be able to host it
-    model = eqx.filter_eval_shape(eqx.nn.Linear, in_features=1_000, out_features=1_000_000*24, key=subkey)
-    dtype = model.weight.dtype
-    lim = 1 / math.sqrt(model.in_features)
+    model = eqx.filter_eval_shape(GPT, key=subkey)
+    dtype = model.lm_head.weight.dtype
 
-    key, subkey = jax.random.split(key)
-    weight = init_shard_parameters(key, model.weight.shape, dtype, lim, mesh, sharding, n_processes, 0)
+    arrays, statics = eqx.partition(model.blocks, lambda x: isinstance(x, eqx.nn.Linear), is_leaf = lambda x: isinstance(x, eqx.nn.Linear))
+    linears = jax.tree.leaves(arrays, is_leaf=lambda x: isinstance(x, eqx.nn.Linear))
+    new_layers = []
+    for i in linears:
+        key, subkey = jax.random.split(key)
+        new_layers.append(init_shard_linear(subkey, i, mesh, sharding, n_processes))
+    
+    new_arrays = eqx.tree_at(lambda x: jax.tree.leaves(x, is_leaf=lambda x: isinstance(x, eqx.nn.Linear)), arrays, new_layers)
 
-    key, subkey = jax.random.split(key)
-    bias = init_shard_parameters(key, model.bias.shape, dtype, lim, mesh, sharding, n_processes, 0)
+    new_blocks = eqx.combine(new_arrays, statics, is_leaf=lambda x: isinstance(x, eqx.nn.Linear))
+    # lim = 1 / math.sqrt(model.in_features)
 
-    model = eqx.tree_at(lambda m: m.weight, model, weight)
-    model = eqx.tree_at(lambda m: m.bias, model, bias)
+    # key, subkey = jax.random.split(key)
+    # weight = init_shard_parameters(key, model.weight.shape, dtype, lim, mesh, sharding, n_processes, 0)
+
+    # key, subkey = jax.random.split(key)
+    # bias = init_shard_parameters(key, model.bias.shape, dtype, lim, mesh, sharding, n_processes, 0)
+
+    # model = eqx.tree_at(lambda m: m.weight, model, weight)
+    # model = eqx.tree_at(lambda m: m.bias, model, bias)
 
     # This requests 192GB of RAMs, and it should fail on a single process
     # model = eqx.nn.Linear(1000, 1_000_000*24, key = jax.random.PRNGKey(0))
 
-    data_local = jnp.ones(1000)
+    # data_local = jnp.ones(1000)
 
-    f = eqx.filter_jit(model)
-    result = f(data_local)
+    # f = eqx.filter_jit(model)
+    # result = f(data_local)
 
-    print(result.devices())
+    # print(result.devices())
     # value = process_allgather(result)
     # print(value)
