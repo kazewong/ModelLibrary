@@ -72,7 +72,10 @@ if __name__ == "__main__":
         )
     )
 
+    # This shards the model across N process, so 5 40GBs GPUs should be able to host it
     model = Linear_shard(1000, 1_000_000*24, mesh=mesh, sharding=sharding, n_devices=n_processes, key = jax.random.PRNGKey(0))
+
+    # This requests 192GB of RAMs, and it should fail on a single process
     # model = eqx.nn.Linear(1000, 1_000_000*24, key = jax.random.PRNGKey(0))
 
     # data_local = jnp.ones(24)
