@@ -72,12 +72,14 @@ if __name__ == "__main__":
         )
     )
 
-    model = Linear_shard(24, 24*4, mesh=mesh, sharding=sharding, n_devices=n_processes, key = jax.random.PRNGKey(0))
-    data_local = jnp.ones(24)
+    model = Linear_shard(1000, 1_000_000*24, mesh=mesh, sharding=sharding, n_devices=n_processes, key = jax.random.PRNGKey(0))
+    # model = eqx.nn.Linear(1000, 1_000_000*24, key = jax.random.PRNGKey(0))
 
-    f = eqx.filter_jit(model)
-    result = f(data_local)
+    # data_local = jnp.ones(24)
 
-    print(result.devices())
-    value = process_allgather(result)
-    print(value)
+    # f = eqx.filter_jit(model)
+    # result = f(data_local)
+
+    # print(result.devices())
+    # value = process_allgather(result)
+    # print(value)
