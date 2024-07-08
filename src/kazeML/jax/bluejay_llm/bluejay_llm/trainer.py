@@ -1,4 +1,4 @@
-from bluejay_llm.bluejay import GPT
+from bluejay_llm.bluejay import GPT, init_shard_GPT
 from bluejay_llm.dataloader import ThePileDataset
 
 from jaxtyping import PRNGKeyArray, PyTree, Float, Array, Int
@@ -87,32 +87,6 @@ class BlueJayTrainer:
         if jax.process_index() == 0:
             print("Creating dataloaders")
 
-        # if config.distributed:
-        #     train_sampler = DistributedSampler(
-        #         train_set,
-        #         num_replicas=n_processes,
-        #         rank=jax.process_index(),
-        #         shuffle=False,
-        #         seed=config.seed,
-        #     )
-        #     test_sampler = DistributedSampler(
-        #         test_set,
-        #         num_replicas=n_processes,
-        #         rank=jax.process_index(),
-        #         shuffle=False,
-        #         seed=config.seed,
-        #     )
-        # else:
-        # train_sampler = BatchSampler(
-        #     SequentialSampler(train_set),
-        #     batch_size=config.batch_size,
-        #     drop_last=True,
-        # )
-        # test_sampler = BatchSampler(
-        #     SequentialSampler(test_set),
-        #     batch_size=config.batch_size,
-        #     drop_last=True,
-        # )
         self.train_loader = DataLoader(
             train_set,
             batch_size=config.batch_size,
@@ -135,7 +109,7 @@ class BlueJayTrainer:
 
         self.key, subkey = jax.random.split(jax.random.PRNGKey(config.seed))
 
-        model = GPT(
+        self.model = init_shard_GPT(
             config.vocab_size,
             config.block_size,
             config.n_layer,
@@ -144,12 +118,6 @@ class BlueJayTrainer:
             config.bias,
             key=subkey,
         )
-
-        arrays, statics = eqx.partition(
-            model.blocks, eqx.is_array
-        )
-        arrays = jax.device_put(arrays, self.sharding)
-        self.model = eqx.combine(arrays, statics)
 
         scheduler = optax.warmup_cosine_decay_schedule(
             init_value=config.start_learning_rate,

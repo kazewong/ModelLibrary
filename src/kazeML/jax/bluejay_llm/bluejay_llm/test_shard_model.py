@@ -90,7 +90,7 @@ if __name__ == "__main__":
     model = eqx.filter_eval_shape(GPT, key=subkey)
     dtype = model.lm_head.weight.dtype
 
-    # Initialize blocks
+    # Initialize sharedblocks
     arrays, statics = eqx.partition(model.blocks, lambda x: isinstance(x, eqx.nn.Linear), is_leaf = lambda x: isinstance(x, eqx.nn.Linear))
     linears = jax.tree.leaves(arrays, is_leaf=lambda x: isinstance(x, eqx.nn.Linear))
     new_layers = []
@@ -112,7 +112,7 @@ if __name__ == "__main__":
     new_blocks = eqx.combine(new_arrays, statics)
     model = eqx.tree_at(lambda x: x.blocks, model, new_blocks)
 
-    # Initialize layer norms
+    # Initialize sharded layer norms
     arrays, statics = eqx.partition(model, lambda x: isinstance(x, eqx.nn.LayerNorm), is_leaf = lambda x: isinstance(x, eqx.nn.LayerNorm))
     layerNorms = jax.tree.leaves(arrays, is_leaf=lambda x: isinstance(x, eqx.nn.LayerNorm))
     new_layers = []
