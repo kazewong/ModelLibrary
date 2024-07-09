@@ -544,6 +544,28 @@ def init_shard_GPT(
 
         return model
 
+    def init_shard_mask(
+        block_size: int,  mesh: jax.sharding.Mesh, n_devices: int = 1
+    ):
+        
+        sharding = jax.sharding.NamedSharding(
+            mesh,
+            jax.sharding.PartitionSpec(
+                'batch'
+            )
+        )
+        mask = -jnp.inf * jnp.invert(jnp.tril(jnp.ones((model.block_size, model.block_size), dtype=bool)))
+        mask = jnp.nan_to_num(mask, posinf=jnp.inf, neginf=-jnp.inf)
+
+        masks = jax.tree.map(lambda x: mask[int(x.id/n_devices*block_size):int((x.id+1)/n_devices*block_size)], mesh.local_devices)
+        per_device_array = jax.device_put(
+            masks,
+            mesh.local_devices,
+        )
+        return jax.make_array_from_single_device_arrays(
+            mask.shape, sharding, per_device_array
+        )
+
     def init_shard_layer_norm(
             model: eqx.nn.LayerNorm, mesh: jax.sharding.Mesh, sharding: jax.sharding.Sharding, n_devices: int = 1
     ):
@@ -593,7 +615,6 @@ def init_shard_GPT(
             model.weight.shape, sharding, per_device_weight
         )
         return eqx.tree_at(lambda m: m.weight, model, weight)
-        
 
     n_processes = jax.process_count()
     devices = np.array(jax.devices())
@@ -635,9 +656,7 @@ def init_shard_GPT(
     masks = jax.tree.leaves(arrays)
     new_mask = []
     for i in masks:
-        mask = -jnp.inf * jnp.invert(jnp.tril(jnp.ones((model.block_size, model.block_size), dtype=bool)))
-        mask = jnp.nan_to_num(mask, posinf=jnp.inf, neginf=-jnp.inf)
-        new_mask.append(mask)
+        new_mask.append(init_shard_mask(model.block_size, mesh, n_processes))
     new_arrays = eqx.tree_at(lambda x: jax.tree.leaves(x), arrays, new_mask)
     new_blocks = eqx.combine(new_arrays, statics)
     model = eqx.tree_at(lambda x: x.blocks, model, new_blocks)

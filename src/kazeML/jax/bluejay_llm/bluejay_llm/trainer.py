@@ -173,7 +173,7 @@ class BlueJayTrainer:
                     wandb.log({"test_loss": loss})
 
     @staticmethod
-    @eqx.filter_jit
+    @eqx.filter_jit(donate='all')
     def run_step(
         model: GPT,
         opt_state: PyTree,
