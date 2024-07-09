@@ -501,7 +501,7 @@ def init_shard_GPT(
 ) -> GPT:
 
 
-    def init_shard_parameters(
+    def init_shard_parameters_uniform(
         key: PRNGKeyArray, shape: tuple[int, ...], dtype: Any, lim: float, mesh: jax.sharding.Mesh, sharding: jax.sharding.Sharding, n_devices: int = 1, shard_axis: int = 0
     ) -> jax.Array:
         sharded_length = shape[shard_axis]//n_devices
@@ -523,10 +523,10 @@ def init_shard_GPT(
         lim = 1 / math.sqrt(model.in_features)
 
         key, subkey = jax.random.split(key)
-        weight = init_shard_parameters(subkey, model.weight.shape, dtype, lim, mesh, sharding, n_devices, shard_axis)
+        weight = init_shard_parameters_uniform(subkey, model.weight.shape, dtype, lim, mesh, sharding, n_devices, shard_axis)
 
         key, subkey = jax.random.split(key)
-        bias = init_shard_parameters(subkey, model.bias.shape, dtype, lim, mesh, sharding, n_devices, shard_axis)
+        bias = init_shard_parameters_uniform(subkey, model.bias.shape, dtype, lim, mesh, sharding, n_devices, shard_axis)
 
         model = eqx.tree_at(lambda m: m.weight, model, weight)
         model = eqx.tree_at(lambda m: m.bias, model, bias)
@@ -558,8 +558,22 @@ def init_shard_GPT(
         model = eqx.tree_at(lambda m: m.bias, model, bias)
 
         return model
-
     
+    def init_shard_embedding(
+        model: eqx.nn.Embedding, mesh: jax.sharding.Mesh, sharding: jax.sharding.Sharding, n_devices: int = 1, shard_axis: int = 0
+    ):
+        sharded_length = model.weight.shape[shard_axis]//n_devices
+        sharded_shape = model.weight.shape[:shard_axis] + (sharded_length,) + model.weight.shape[shard_axis+1:]
+        per_device_weight = jax.device_put(
+            jax.random.normal(key, sharded_shape, dtype),
+            mesh.local_devices,
+        )
+        weight = jax.make_array_from_single_device_arrays(
+            model.weight.shape, sharding, per_device_weight
+        )
+        return eqx.tree_at(lambda m: m.weight, model, weight)
+        
+
     n_processes = jax.process_count()
     devices = np.array(jax.devices())
     mesh = jax.sharding.Mesh(devices, ("batch"))
@@ -618,8 +632,11 @@ def init_shard_GPT(
 
     # Initialize embedding
     key, subkey = jax.random.split(key)
-    model = eqx.tree_at(lambda x: x.token_embedding, model, eqx.nn.Embedding(model.vocab_size, model.n_embed, key=subkey))
-    model = eqx.tree_at(lambda x: x.position_embedding, model, eqx.nn.Embedding(model.block_size, model.n_embed, key=subkey))
+    token_embedding = init_shard_embedding(model.token_embedding, mesh, sharding, n_processes, shard_axis = 1)
+    model = eqx.tree_at(lambda x: x.token_embedding, model, token_embedding)
+
+    position_embedding = init_shard_embedding(model.position_embedding, mesh, sharding, n_processes, shard_axis = 0)
+    model = eqx.tree_at(lambda x: x.position_embedding, model, position_embedding)
 
     # Initialize lm_head
     key, subkey = jax.random.split(key)
