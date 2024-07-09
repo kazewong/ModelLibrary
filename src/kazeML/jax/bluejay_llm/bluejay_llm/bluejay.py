@@ -198,7 +198,7 @@ class GPT(eqx.Module):
 
     def __init__(
         self,
-        vocab_size: int = 50257,
+        vocab_size: int = 50272, # 50257 is the GPT 2 tokenizer length, but we want something divided by 2
         block_size: int = 1024,
         n_layer: int = 12,
         n_embd: int = 768,
@@ -490,7 +490,7 @@ class GPT(eqx.Module):
     #     return idx
 
 def init_shard_GPT(
-    vocab_size: int = 50257,
+    vocab_size: int = 50272,
     block_size: int = 1024,
     n_layer: int = 12,
     n_embd: int = 768,
@@ -502,10 +502,21 @@ def init_shard_GPT(
 
 
     def init_shard_parameters_uniform(
-        key: PRNGKeyArray, shape: tuple[int, ...], dtype: Any, lim: float, mesh: jax.sharding.Mesh, sharding: jax.sharding.Sharding, n_devices: int = 1, shard_axis: int = 0
+        key: PRNGKeyArray, shape: tuple[int, ...], dtype: Any, lim: float, mesh: jax.sharding.Mesh, n_devices: int = 1, shard_axis: int = 0
     ) -> jax.Array:
         sharded_length = shape[shard_axis]//n_devices
         sharded_shape = shape[:shard_axis] + (sharded_length,) + shape[shard_axis+1:]
+        
+        shard_tuple = list(None for i in range(len(shape)))
+        shard_tuple[shard_axis] = 'batch'
+        shard_tuple = tuple(shard_tuple)
+        sharding = jax.sharding.NamedSharding(
+            mesh,
+            jax.sharding.PartitionSpec(
+                *shard_tuple
+            )
+        )
+
         per_device_array = jax.device_put(
             jnp.split(
                 jax.random.uniform(key, sharded_shape, dtype, minval=-lim, maxval=lim)
@@ -518,15 +529,15 @@ def init_shard_GPT(
         )
 
     def init_shard_linear(
-            key: PRNGKeyArray, model: eqx.nn.Linear, mesh: jax.sharding.Mesh, sharding: jax.sharding.Sharding, n_devices: int = 1, shard_axis: int = 0
+            key: PRNGKeyArray, model: eqx.nn.Linear, mesh: jax.sharding.Mesh, n_devices: int = 1, shard_axis: int = 0
     ):
         lim = 1 / math.sqrt(model.in_features)
 
         key, subkey = jax.random.split(key)
-        weight = init_shard_parameters_uniform(subkey, model.weight.shape, dtype, lim, mesh, sharding, n_devices, shard_axis)
+        weight = init_shard_parameters_uniform(subkey, model.weight.shape, dtype, lim, mesh, n_devices, 1)
 
         key, subkey = jax.random.split(key)
-        bias = init_shard_parameters_uniform(subkey, model.bias.shape, dtype, lim, mesh, sharding, n_devices, shard_axis)
+        bias = init_shard_parameters_uniform(subkey, model.bias.shape, dtype, lim, mesh, n_devices, 0)
 
         model = eqx.tree_at(lambda m: m.weight, model, weight)
         model = eqx.tree_at(lambda m: m.bias, model, bias)
@@ -560,12 +571,22 @@ def init_shard_GPT(
         return model
     
     def init_shard_embedding(
-        model: eqx.nn.Embedding, mesh: jax.sharding.Mesh, sharding: jax.sharding.Sharding, n_devices: int = 1, shard_axis: int = 0
+        model: eqx.nn.Embedding, mesh: jax.sharding.Mesh, n_devices: int = 1, shard_axis: int = 0
     ):
         sharded_length = model.weight.shape[shard_axis]//n_devices
         sharded_shape = model.weight.shape[:shard_axis] + (sharded_length,) + model.weight.shape[shard_axis+1:]
+
+        shard_tuple = list(None for i in range(len(model.weight.shape)))
+        shard_tuple[shard_axis] = 'batch'
+        shard_tuple = tuple(shard_tuple)
+        sharding = jax.sharding.NamedSharding(
+            mesh,
+            jax.sharding.PartitionSpec(
+                *shard_tuple
+            )
+        )
         per_device_weight = jax.device_put(
-            jax.random.normal(key, sharded_shape, dtype),
+            jnp.split(jax.random.normal(key, sharded_shape, dtype), len(mesh.local_devices), axis=shard_axis),
             mesh.local_devices,
         )
         weight = jax.make_array_from_single_device_arrays(
@@ -604,7 +625,7 @@ def init_shard_GPT(
     new_layers = []
     for i in linears:
         key, subkey = jax.random.split(key)
-        new_layers.append(init_shard_linear(subkey, i, mesh, sharding, n_processes))
+        new_layers.append(init_shard_linear(subkey, i, mesh, n_processes))
     
     new_arrays = eqx.tree_at(lambda x: jax.tree.leaves(x, is_leaf=lambda x: isinstance(x, eqx.nn.Linear)), arrays, new_layers)
     new_blocks = eqx.combine(new_arrays, statics, is_leaf=lambda x: isinstance(x, eqx.nn.Linear))
@@ -632,14 +653,16 @@ def init_shard_GPT(
 
     # Initialize embedding
     key, subkey = jax.random.split(key)
-    token_embedding = init_shard_embedding(model.token_embedding, mesh, sharding, n_processes, shard_axis = 1)
+    token_embedding = init_shard_embedding(model.token_embedding, mesh, n_processes, shard_axis = 1)
     model = eqx.tree_at(lambda x: x.token_embedding, model, token_embedding)
 
-    position_embedding = init_shard_embedding(model.position_embedding, mesh, sharding, n_processes, shard_axis = 0)
+    key, subkey = jax.random.split(key)
+    position_embedding = init_shard_embedding(model.position_embedding, mesh, n_processes, shard_axis = 1)
     model = eqx.tree_at(lambda x: x.position_embedding, model, position_embedding)
 
     # Initialize lm_head
     key, subkey = jax.random.split(key)
-    model = eqx.tree_at(lambda x: x.lm_head, model, eqx.nn.Linear(model.n_embed, model.vocab_size, key=subkey))
+    lm_head = init_shard_linear(subkey, model.lm_head, mesh, n_processes, shard_axis=1)
+    model = eqx.tree_at(lambda x: x.lm_head, model, lm_head)
 
     return model

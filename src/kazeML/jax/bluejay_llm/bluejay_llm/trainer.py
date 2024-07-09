@@ -49,7 +49,7 @@ class BlueJayExperimentParser(Tap):
 
 class BlueJayModelParser(Tap):
     # Model hyperparameters
-    vocab_size: int = 50257
+    vocab_size: int = 50272  # 50257 is the GPT 2 tokenizer length, but we want something divided by 2
     block_size: int = 1024
     n_layer: int = 12
     n_embd: int = 768
@@ -119,6 +119,7 @@ class BlueJayTrainer:
             key=subkey,
         )
 
+        print(jax.tree.map(lambda x: len(x.devices()), jax.tree.leaves(eqx.filter(self.model, eqx.is_array))))
         scheduler = optax.warmup_cosine_decay_schedule(
             init_value=config.start_learning_rate,
             peak_value=config.start_learning_rate,
