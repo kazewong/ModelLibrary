@@ -193,6 +193,10 @@ class GPT(eqx.Module):
         return self.token_embedding.embedding_size
 
     @property
+    def n_head(self) -> int:
+        return self.blocks[0].attn.n_head
+
+    @property
     def block_size(self) -> int:
         return self.position_embedding.num_embeddings
 
@@ -201,6 +205,7 @@ class GPT(eqx.Module):
         vocab_size: int = 50272, # 50257 is the GPT 2 tokenizer length, but we want something divided by 2
         block_size: int = 1024,
         n_layer: int = 12,
+        n_head: int =12,
         n_embd: int = 768,
         dropout: float = 0.0,
         bias: bool = True,
@@ -219,7 +224,7 @@ class GPT(eqx.Module):
         self.blocks = []
         for _ in range(n_layer):
             key, subkey = jax.random.split(key)
-            self.blocks.append(Block(n_embd=n_embd, dropout=dropout, bias=bias, key=subkey))
+            self.blocks.append(Block(n_embd=n_embd, n_head=n_head, dropout=dropout, bias=bias, key=subkey))
 
         self.layer_norm = eqx.nn.LayerNorm(n_embd, use_bias=bias)
         key, subkey = jax.random.split(key)
@@ -444,21 +449,20 @@ class GPT(eqx.Module):
 
     #     return optimizer
 
-    # def estimate_mfu(self, fwdbwd_per_iter, dt):
-    #     """estimate model flops utilization (MFU) in units of A100 bfloat16 peak FLOPS"""
-    #     # first estimate the number of flops we do per iteration.
-    #     # see PaLM paper Appendix B as ref: https://arxiv.org/abs/2204.02311
-    #     N = self.get_num_params()
-    #     cfg = self.config
-    #     L, H, Q, T = cfg.n_layer, cfg.n_head, cfg.n_embd // cfg.n_head, cfg.block_size
-    #     flops_per_token = 6 * N + 12 * L * H * Q * T
-    #     flops_per_fwdbwd = flops_per_token * T
-    #     flops_per_iter = flops_per_fwdbwd * fwdbwd_per_iter
-    #     # express our flops throughput as ratio of A100 bfloat16 peak flops
-    #     flops_achieved = flops_per_iter * (1.0 / dt)  # per second
-    #     flops_promised = 312e12  # A100 GPU bfloat16 peak flops is 312 TFLOPS
-    #     mfu = flops_achieved / flops_promised
-    #     return mfu
+    def estimate_mfu(self, fwdbwd_per_iter, dt):
+        """estimate model flops utilization (MFU) in units of A100 bfloat16 peak FLOPS"""
+        # first estimate the number of flops we do per iteration.
+        # see PaLM paper Appendix B as ref: https://arxiv.org/abs/2204.02311
+        N = self.get_num_params()
+        L, H, Q, T = self.n_layer, self.n_head, self.n_embed // self.n_head, self.block_size
+        flops_per_token = 6 * N + 12 * L * H * Q * T
+        flops_per_fwdbwd = flops_per_token * T
+        flops_per_iter = flops_per_fwdbwd * fwdbwd_per_iter
+        # express our flops throughput as ratio of A100 bfloat16 peak flops
+        flops_achieved = flops_per_iter * (1.0 / dt)  # per second
+        flops_promised = 312e12  # A100 GPU bfloat16 peak flops is 312 TFLOPS
+        mfu = flops_achieved / flops_promised
+        return mfu
 
     # @torch.no_grad()
     # def generate(self, idx, max_new_tokens, temperature=1.0, top_k=None):
